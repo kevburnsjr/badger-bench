@@ -41,6 +41,9 @@ var (
 	history   = flag.Bool("history", false, "Store history.")
 	batchSize = flag.Int("batchsize", 1000, "Batch Size")
 	tsonly    = flag.Bool("tsonly", false, "Store timeseries only")
+	syncWrite = flag.Bool("sync", false, "Strong durability")
+	n         = flag.Int("n", 32, "Number of concurrent writers")
+	a         = flag.Bool("a", false, "Do not delete existing database (append)")
 )
 
 type entry struct {
@@ -86,6 +89,7 @@ func writeBatch(entries []*entry) int {
 	var ts = make([]byte, 8)
 	binary.BigEndian.PutUint64(ts, uint64(time.Now().UnixNano()))
 
+	// Badger
 	if bdb != nil {
 		txn := bdb.NewTransaction(true)
 
@@ -108,6 +112,7 @@ func writeBatch(entries []*entry) int {
 		y.Check(txn.Commit())
 	}
 
+	// LevelDB
 	if ldb != nil {
 		batch := new(leveldb.Batch)
 		for i, e := range entries {
@@ -124,13 +129,14 @@ func writeBatch(entries []*entry) int {
 			copy(keys[i*keylen:i*keylen+keylen], e.Key)
 		}
 		wopt := &opt.WriteOptions{}
-		wopt.Sync = true
+		wopt.Sync = *syncWrite
 		if *history || *tsonly {
 			batch.Put(ts, keys)
 		}
 		y.Check(ldb.Write(batch, wopt))
 	}
 
+	// RocksDB
 	if rdb != nil {
 		rb := rdb.NewWriteBatch()
 		defer rb.Destroy()
@@ -153,6 +159,7 @@ func writeBatch(entries []*entry) int {
 		y.Check(rdb.WriteBatch(rb))
 	}
 
+	// BoltDB
 	if boltdb != nil {
 		err := boltdb.Batch(func(txn *bolt.Tx) error {
 			boltBkt := txn.Bucket([]byte("bench"))
@@ -180,6 +187,7 @@ func writeBatch(entries []*entry) int {
 		y.Check(err)
 	}
 
+	// LMDB
 	if lmdbEnv != nil {
 		err := lmdbEnv.Update(func(txn *lmdb.Txn) error {
 			for i, e := range entries {
@@ -267,20 +275,26 @@ func main() {
 	} else {
 		fmt.Printf("WITH RANDOM KEYS\n")
 	}
+	fmt.Printf("BATCH SIZE %d\n", *batchSize)
+	fmt.Printf("CONCURRENCY %d\n", *n)
+	if *a {
+		fmt.Printf("APPEND\n")
+	}
 	badgerOpt := badger.DefaultOptions(*dir + "/badger")
 	badgerOpt.TableLoadingMode = options.FileIO
-	badgerOpt.SyncWrites = true
+	badgerOpt.SyncWrites = *syncWrite
 	badgerOpt.Logger = logger{}
 
 	var err error
-
 	var init bool
 
 	if *which == "badger" {
 		init = true
 		fmt.Println("Init Badger")
-		y.Check(os.RemoveAll(*dir + "/badger"))
-		os.MkdirAll(*dir+"/badger", 0777)
+		if !*a {
+			y.Check(os.RemoveAll(*dir + "/badger"))
+			os.MkdirAll(*dir+"/badger", 0777)
+		}
 		bdb, err = badger.Open(badgerOpt)
 		if err != nil {
 			log.Fatalf("while opening badger: %v", err)
@@ -288,18 +302,26 @@ func main() {
 	} else if *which == "rocksdb" {
 		init = true
 		fmt.Println("Init Rocks")
-		os.RemoveAll(*dir + "/rocks")
-		os.MkdirAll(*dir+"/rocks", 0777)
-		rdb, err = store.NewStore(*dir + "/rocks")
+		if !*a {
+			os.RemoveAll(*dir + "/rocks")
+			os.MkdirAll(*dir+"/rocks", 0777)
+		}
+		if *syncWrite {
+			rdb, err = store.NewSyncStore(*dir + "/rocks")
+		} else {
+			rdb, err = store.NewStore(*dir + "/rocks")
+		}
 		y.Check(err)
 	} else if *which == "bolt" {
 		init = true
 		fmt.Println("Init BoltDB")
-		os.RemoveAll(*dir + "/bolt")
-		os.MkdirAll(*dir+"/bolt", 0777)
+		if !*a {
+			os.RemoveAll(*dir + "/bolt")
+			os.MkdirAll(*dir+"/bolt", 0777)
+		}
 		boltdb, err = bolt.Open(*dir+"/bolt/bolt.db", 0777, bolt.DefaultOptions)
 		y.Check(err)
-		boltdb.NoSync = false // Set this to speed up writes
+		boltdb.NoSync = !*syncWrite // Set this to speed up writes
 		err = boltdb.Update(func(txn *bolt.Tx) error {
 			var err error
 			_, err = txn.CreateBucketIfNotExists([]byte("bench"))
@@ -310,18 +332,22 @@ func main() {
 	} else if *which == "leveldb" {
 		init = true
 		fmt.Println("Init LevelDB")
-		os.RemoveAll(*dir + "/level")
-		os.MkdirAll(*dir+"/level", 0777)
+		if !*a {
+			os.RemoveAll(*dir + "/level")
+			os.MkdirAll(*dir+"/level", 0777)
+		}
 		ldb, err = leveldb.OpenFile(*dir+"/level/l.db", &opt.Options{
-			// NoSync: true,
+			NoSync: !*syncWrite,
 		})
 		y.Check(err)
 
 	} else if *which == "lmdb" {
 		init = true
 		fmt.Println("Init lmdb")
-		os.RemoveAll(*dir + "/lmdb")
-		os.MkdirAll(*dir+"/lmdb", 0777)
+		if !*a {
+			os.RemoveAll(*dir + "/lmdb")
+			os.MkdirAll(*dir+"/lmdb", 0777)
+		}
 
 		lmdbEnv, err = lmdb.NewEnv()
 		y.Check(err)
@@ -329,8 +355,11 @@ func main() {
 		y.Check(err)
 		err = lmdbEnv.SetMapSize(1 << 38) // ~273Gb
 		y.Check(err)
-
-		err = lmdbEnv.Open(*dir+"/lmdb", lmdb.NoSync | lmdb.NoReadahead, 0777)
+		o := lmdb.NoReadahead
+		if !*syncWrite {
+			o |= lmdb.NoSync
+		}
+		err = lmdbEnv.Open(*dir+"/lmdb", uint(o), 0777)
 		y.Check(err)
 
 		// Acquire handle
@@ -382,7 +411,7 @@ func main() {
 		}
 	}()
 
-	N := 32
+	N := *n
 	var wg sync.WaitGroup
 	for i := 0; i < N; i++ {
 		wg.Add(1)
