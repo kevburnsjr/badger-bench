@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"net/http"
 	_ "net/http/pprof"
+	"encoding/binary"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -30,11 +31,16 @@ import (
 const mil float64 = 1000000
 
 var (
-	which     = flag.String("kv", "badger", "Which KV store to use. Options: badger, rocksdb, bolt, leveldb")
+	which     = flag.String("kv", "", "Which KV store to use. Options: badger, rocksdb, bolt, leveldb, lmdb")
 	numKeys   = flag.Float64("keys_mil", 10.0, "How many million keys to write.")
 	valueSize = flag.Int("valsz", 128, "Value size in bytes.")
 	dir       = flag.String("dir", "", "Base dir for writes.")
 	mode      = flag.String("profile.mode", "", "enable profiling mode, one of [cpu, mem, mutex, block]")
+	withRead  = flag.Bool("read", false, "Read each key prior to write.")
+	seqKeys   = flag.Bool("keys_seq", false, "Use sequential keys.")
+	history   = flag.Bool("history", false, "Store history.")
+	batchSize = flag.Int("batchsize", 1000, "Batch Size")
+	tsonly    = flag.Bool("tsonly", false, "Store timeseries only")
 )
 
 type entry struct {
@@ -44,14 +50,18 @@ type entry struct {
 }
 
 func fillEntry(e *entry) {
-	k := rand.Int() % int(*numKeys*mil)
-	key := fmt.Sprintf("vsz=%05d-k=%010d", *valueSize, k) // 22 bytes.
-	if cap(e.Key) < len(key) {
-		e.Key = make([]byte, 2*len(key))
+	// k := rand.Int() % int(*numKeys*mil)
+	// key := fmt.Sprintf("vsz=%05d-k=%010d", *valueSize, k) // 22 bytes.
+	// if cap(e.Key) < len(key) {
+		// e.Key = make([]byte, 2*len(key))
+	// }
+	// e.Key = e.Key[:len(key)]
+	// copy(e.Key, key)
+	if *seqKeys {
+		binary.BigEndian.PutUint64(e.Key, uint64(time.Now().UnixNano()))
+	} else {
+		rand.Read(e.Key)
 	}
-	e.Key = e.Key[:len(key)]
-	copy(e.Key, key)
-
 	rand.Read(e.Value)
 	e.Meta = 0
 }
@@ -63,36 +73,82 @@ var boltdb *bolt.DB
 var ldb *leveldb.DB
 var lmdbEnv *lmdb.Env
 var lmdbDBI lmdb.DBI
+var lmdbDBIHistory lmdb.DBI
 
 func writeBatch(entries []*entry) int {
 	for _, e := range entries {
 		fillEntry(e)
 	}
+	var err error
+	var keylen = len(entries[0].Key)
+	var keys = make([]byte, len(entries) * keylen)
+
+	var ts = make([]byte, 8)
+	binary.BigEndian.PutUint64(ts, uint64(time.Now().UnixNano()))
 
 	if bdb != nil {
 		txn := bdb.NewTransaction(true)
 
-		for _, e := range entries {
-			y.Check(txn.Set(e.Key, e.Value))
+		for i, e := range entries {
+			if *withRead {
+				_, err = txn.Get(e.Key)
+				if err == nil {
+					println("duplicate")
+					continue
+				}
+			}
+			if !*tsonly {
+				y.Check(txn.Set(e.Key, e.Value))
+			}
+			copy(keys[i*keylen:i*keylen+keylen], e.Key)
+		}
+		if *history || *tsonly {
+			txn.Set(ts, keys)
 		}
 		y.Check(txn.Commit())
 	}
 
 	if ldb != nil {
 		batch := new(leveldb.Batch)
-		for _, e := range entries {
-			batch.Put(e.Key, e.Value)
+		for i, e := range entries {
+			if *withRead {
+				_, err = ldb.Get(e.Key, nil)
+				if err == nil {
+					println("duplicate")
+					continue
+				}
+			}
+			if !*tsonly {
+				batch.Put(e.Key, e.Value)
+			}
+			copy(keys[i*keylen:i*keylen+keylen], e.Key)
 		}
 		wopt := &opt.WriteOptions{}
 		wopt.Sync = true
+		if *history || *tsonly {
+			batch.Put(ts, keys)
+		}
 		y.Check(ldb.Write(batch, wopt))
 	}
 
 	if rdb != nil {
 		rb := rdb.NewWriteBatch()
 		defer rb.Destroy()
-		for _, e := range entries {
-			rb.Put(e.Key, e.Value)
+		for i, e := range entries {
+			if *withRead {
+				v, _ := rdb.Get(e.Key)
+				if v.Size() > 0 {
+					println("duplicate")
+					continue
+				}
+			}
+			if !*tsonly {
+				rb.Put(e.Key, e.Value)
+			}
+			copy(keys[i*keylen:i*keylen+keylen], e.Key)
+		}
+		if *history || *tsonly {
+			rb.Put(ts, keys)
 		}
 		y.Check(rdb.WriteBatch(rb))
 	}
@@ -101,8 +157,21 @@ func writeBatch(entries []*entry) int {
 		err := boltdb.Batch(func(txn *bolt.Tx) error {
 			boltBkt := txn.Bucket([]byte("bench"))
 			y.AssertTrue(boltBkt != nil)
-			for _, e := range entries {
-				if err := boltBkt.Put(e.Key, e.Value); err != nil {
+			for i, e := range entries {
+				v := boltBkt.Get(e.Key)
+				if len(v) > 0 {
+					println("duplicate")
+					continue
+				}
+				if !*tsonly {
+					if err := boltBkt.Put(e.Key, e.Value); err != nil {
+						return err
+					}
+				}
+				copy(keys[i*keylen:i*keylen+keylen], e.Key)
+			}
+			if *history || *tsonly {
+				if err := boltBkt.Put(ts, keys); err != nil {
 					return err
 				}
 			}
@@ -113,9 +182,24 @@ func writeBatch(entries []*entry) int {
 
 	if lmdbEnv != nil {
 		err := lmdbEnv.Update(func(txn *lmdb.Txn) error {
-			for _, e := range entries {
-				err := txn.Put(lmdbDBI, e.Key, e.Value, 0)
-				if err != nil {
+			for i, e := range entries {
+				if *withRead {
+					_, err = txn.Get(lmdbDBI, e.Key)
+					if err == nil {
+						println("duplicate")
+						continue
+					}
+				}
+				if !*tsonly {
+					err := txn.Put(lmdbDBI, e.Key, e.Value, 0)
+					if err != nil {
+						return err
+					}
+				}
+				copy(keys[i*keylen:i*keylen+keylen], e.Key)
+			}
+			if *history || *tsonly {
+				if err := txn.Put(lmdbDBIHistory, ts, keys, 0); err != nil {
 					return err
 				}
 			}
@@ -136,6 +220,16 @@ func humanize(n int64) string {
 	}
 	return fmt.Sprintf("%5.2f", float64(n))
 }
+
+type logger struct {}
+func (l logger) Errorf(v string, args ...interface{}) {
+	log.Printf(v, args...)
+}
+func (l logger) Warningf(v string, args ...interface{}) {
+	log.Printf(v, args...)
+}
+func (l logger) Infof(v string, args ...interface{}) {}
+func (l logger) Debugf(v string, args ...interface{}) {}
 
 func main() {
 	flag.Parse()
@@ -158,9 +252,25 @@ func main() {
 
 	nw := *numKeys * mil
 	fmt.Printf("TOTAL KEYS TO WRITE: %s\n", humanize(int64(nw)))
-	opt := badger.DefaultOptions(*dir + "/badger")
-	opt.TableLoadingMode = options.MemoryMap
-	opt.SyncWrites = true
+	fmt.Printf("WITH VALUE SIZE: %s\n", humanize(int64(*valueSize)))
+	if *withRead {
+		fmt.Printf("WITH READ\n")
+	}
+	if *history {
+		fmt.Printf("WITH HISTORY\n")
+	}
+	if *tsonly {
+		fmt.Printf("TIMESERIES ONLY\n")
+	}
+	if *seqKeys {
+		fmt.Printf("WITH SEQUENTIAL KEYS\n")
+	} else {
+		fmt.Printf("WITH RANDOM KEYS\n")
+	}
+	badgerOpt := badger.DefaultOptions(*dir + "/badger")
+	badgerOpt.TableLoadingMode = options.FileIO
+	badgerOpt.SyncWrites = true
+	badgerOpt.Logger = logger{}
 
 	var err error
 
@@ -171,7 +281,7 @@ func main() {
 		fmt.Println("Init Badger")
 		y.Check(os.RemoveAll(*dir + "/badger"))
 		os.MkdirAll(*dir+"/badger", 0777)
-		bdb, err = badger.Open(opt)
+		bdb, err = badger.Open(badgerOpt)
 		if err != nil {
 			log.Fatalf("while opening badger: %v", err)
 		}
@@ -202,7 +312,9 @@ func main() {
 		fmt.Println("Init LevelDB")
 		os.RemoveAll(*dir + "/level")
 		os.MkdirAll(*dir+"/level", 0777)
-		ldb, err = leveldb.OpenFile(*dir+"/level/l.db", nil)
+		ldb, err = leveldb.OpenFile(*dir+"/level/l.db", &opt.Options{
+			// NoSync: true,
+		})
 		y.Check(err)
 
 	} else if *which == "lmdb" {
@@ -213,18 +325,22 @@ func main() {
 
 		lmdbEnv, err = lmdb.NewEnv()
 		y.Check(err)
-		err = lmdbEnv.SetMaxDBs(1)
+		err = lmdbEnv.SetMaxDBs(2)
 		y.Check(err)
 		err = lmdbEnv.SetMapSize(1 << 38) // ~273Gb
 		y.Check(err)
 
-		err = lmdbEnv.Open(*dir+"/lmdb", 0, 0777)
+		err = lmdbEnv.Open(*dir+"/lmdb", lmdb.NoSync | lmdb.NoReadahead, 0777)
 		y.Check(err)
 
 		// Acquire handle
 		err := lmdbEnv.Update(func(txn *lmdb.Txn) error {
 			var err error
 			lmdbDBI, err = txn.CreateDBI("bench")
+			if err != nil {
+				return nil
+			}
+			lmdbDBIHistory, err = txn.CreateDBI("bench-history")
 			return err
 		})
 		y.Check(err)
@@ -236,22 +352,26 @@ func main() {
 		log.Fatalf("Invalid arguments. Unable to init any store.")
 	}
 
-	rc := ratecounter.NewRateCounter(time.Minute)
+	rc := ratecounter.NewRateCounter(10 * time.Second)
 	var counter int64
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
 		var count int64
-		t := time.NewTicker(time.Second)
+		t := time.NewTicker(10 * time.Second)
 		defer t.Stop()
 		for {
 			select {
 			case <-t.C:
-				fmt.Printf("[%04d] Write key rate per minute: %s. Total: %s\n",
+				fmt.Printf("[%04d] Write key rate per second: %s. Total: %s\n",
 					count,
-					humanize(rc.Rate()),
+					humanize(rc.Rate()/10),
 					humanize(atomic.LoadInt64(&counter)))
 				count++
 			case <-ctx.Done():
+				fmt.Printf("[%04d] Write key rate per second: %s. Total: %s\n",
+					count,
+					humanize(rc.Rate()/10),
+					humanize(atomic.LoadInt64(&counter)))
 				return
 			}
 		}
@@ -267,10 +387,14 @@ func main() {
 	for i := 0; i < N; i++ {
 		wg.Add(1)
 		go func(proc int) {
-			entries := make([]*entry, 1000)
+			entries := make([]*entry, *batchSize)
 			for i := 0; i < len(entries); i++ {
 				e := new(entry)
-				e.Key = make([]byte, 22)
+				if *seqKeys {
+					e.Key = make([]byte, 8)
+				} else {
+					e.Key = make([]byte, 16)
+				}
 				e.Value = make([]byte, *valueSize)
 				entries[i] = e
 			}

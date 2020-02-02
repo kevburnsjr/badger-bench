@@ -1,0 +1,421 @@
+export LD_LIBRARY_PATH=/home/ec2-user/rocksdb-5.1.4/
+
+
+
+---- 10M Random ---
+
+
+
+time go run populate/main.go --kv lmdb --valsz 0 --keys_mil 10 --dir=$DATADIR --read
+[0000] Write key rate per second: 255.90K. Total:   2.56M
+[0001] Write key rate per second: 201.80K. Total:   4.58M
+[0002] Write key rate per second: 182.60K. Total:   6.40M
+[0003] Write key rate per second: 176.50K. Total:   8.17M
+[0004] Write key rate per second: 165.20K. Total:   9.82M
+[0005] Write key rate per second: 158.60K. Total:  10.02M
+real    0m52.230s
+user    0m30.391s
+sys     0m26.379s
+
+time go run populate/main.go --kv rocksdb --valsz 0 --keys_mil 10 --dir=$DATADIR --read
+[0000] Write key rate per second: 262.90K. Total:   2.63M
+[0001] Write key rate per second: 115.30K. Total:   3.85M
+[0002] Write key rate per second:  94.30K. Total:   4.79M
+[0003] Write key rate per second:  73.00K. Total:   5.57M
+[0004] Write key rate per second:  70.90K. Total:   6.27M
+[0005] Write key rate per second:  54.40K. Total:   6.82M
+[0006] Write key rate per second: 120.00K. Total:   8.07M
+[0007] Write key rate per second:  96.40K. Total:   9.04M
+[0008] Write key rate per second:  79.00K. Total:   9.83M
+[0009] Write key rate per second:  76.20K. Total:  10.02M
+real    1m33.415s
+user    2m31.863s
+sys     0m27.218s
+
+
+time go run populate/main.go --kv badger --valsz 0 --keys_mil 10 --dir=$DATADIR --read
+[0000] Write key rate per second: 263.60K. Total:   2.64M
+[0001] Write key rate per second: 202.20K. Total:   4.83M
+[0002] Write key rate per second: 151.90K. Total:   6.39M
+[0003] Write key rate per second: 165.60K. Total:   8.08M
+[0004] Write key rate per second: 193.50K. Total:  10.02M
+real    0m55.376s
+user    1m41.246s
+sys     0m2.270s
+
+time go run populate/main.go --kv leveldb --valsz 0 --keys_mil 10 --dir=$DATADIR --read
+[0000] Write key rate per second: 116.40K. Total:   1.16M
+[0001] Write key rate per second:  75.00K. Total:   1.91M
+[0002] Write key rate per second:  65.10K. Total:   2.57M
+[0003] Write key rate per second:  60.60K. Total:   3.17M
+[0004] Write key rate per second:  55.60K. Total:   3.73M
+[0005] Write key rate per second:  52.30K. Total:   4.25M
+[0006] Write key rate per second:  49.50K. Total:   4.75M
+[0007] Write key rate per second:  47.40K. Total:   5.23M
+[0008] Write key rate per second:  45.00K. Total:   5.68M
+[0009] Write key rate per second:  44.40K. Total:   6.12M
+[0010] Write key rate per second:  40.80K. Total:   6.53M
+[0011] Write key rate per second:  40.40K. Total:   6.93M
+[0012] Write key rate per second:  40.90K. Total:   7.34M
+[0013] Write key rate per second:  40.20K. Total:   7.75M
+[0014] Write key rate per second:  38.40K. Total:   8.13M
+[0015] Write key rate per second:  38.40K. Total:   8.51M
+[0016] Write key rate per second:  38.40K. Total:   8.90M
+[0017] Write key rate per second:  37.20K. Total:   9.28M
+[0018] Write key rate per second:  36.00K. Total:   9.64M
+[0019] Write key rate per second:  38.00K. Total:  10.02M
+real    3m20.580s
+user    5m48.266s
+sys     0m28.053s
+
+time go run populate/main.go --kv bolt --valsz 0 --keys_mil 10 --dir=$DATADIR --read
+[0000] Write key rate per second: 108.80K. Total:   1.09M
+[0001] Write key rate per second:  73.60K. Total:   1.86M
+[0002] Write key rate per second:  64.00K. Total:   2.50M
+[0003] Write key rate per second:  57.60K. Total:   3.07M
+[0004] Write key rate per second:  51.20K. Total:   3.58M
+[0005] Write key rate per second:  51.20K. Total:   4.13M
+[0006] Write key rate per second:  48.00K. Total:   4.61M
+[0007] Write key rate per second:  48.00K. Total:   5.09M
+[0008] Write key rate per second:  48.00K. Total:   5.57M
+[0009] Write key rate per second:  44.80K. Total:   6.02M
+[0010] Write key rate per second:  44.80K. Total:   6.46M
+[0011] Write key rate per second:  44.80K. Total:   6.94M
+[0012] Write key rate per second:  44.80K. Total:   7.39M
+[0013] Write key rate per second:  41.60K. Total:   7.81M
+[0014] Write key rate per second:  41.60K. Total:   8.22M
+[0015] Write key rate per second:  41.60K. Total:   8.67M
+[0016] Write key rate per second:  41.60K. Total:   9.09M
+[0017] Write key rate per second:  44.80K. Total:   9.54M
+[0018] Write key rate per second:  41.60K. Total:   9.95M
+[0019] Write key rate per second:  41.60K. Total:  10.02M
+real    3m12.295s
+user    3m52.990s
+sys     0m27.338s
+
+
+
+---- 100M Random ---
+
+
+
+time go run populate/main.go --kv lmdb --valsz 0 --keys_mil 100 --dir=$DATADIR --read
+[0000] Write key rate per second: 256.00K. Total:   2.56M
+[0001] Write key rate per second: 201.60K. Total:   4.58M
+[0002] Write key rate per second: 182.70K. Total:   6.41M
+[0003] Write key rate per second: 176.70K. Total:   8.17M
+[0004] Write key rate per second: 165.60K. Total:   9.83M
+[0005] Write key rate per second: 157.80K. Total:  11.41M
+[0006] Write key rate per second: 156.50K. Total:  12.98M
+[0007] Write key rate per second: 155.00K. Total:  14.53M
+[0008] Write key rate per second: 153.60K. Total:  16.07M
+[0009] Write key rate per second: 149.60K. Total:  17.56M
+[0010] Write key rate per second: 145.20K. Total:  19.02M
+[0011] Write key rate per second: 142.70K. Total:  20.45M
+[0012] Write key rate per second: 142.00K. Total:  21.87M
+[0013] Write key rate per second: 141.00K. Total:  23.28M
+[0014] Write key rate per second: 140.60K. Total:  24.68M
+[0015] Write key rate per second: 139.50K. Total:  26.08M
+[0016] Write key rate per second: 139.50K. Total:  27.48M
+[0017] Write key rate per second: 138.50K. Total:  28.86M
+-------------------------- SNIP -------------------------
+[0058] Write key rate per second: 120.30K. Total:  80.78M
+[0059] Write key rate per second: 120.00K. Total:  81.98M
+[0060] Write key rate per second: 120.00K. Total:  83.18M
+[0061] Write key rate per second: 119.60K. Total:  84.38M
+[0062] Write key rate per second: 119.90K. Total:  85.58M
+[0063] Write key rate per second: 119.30K. Total:  86.77M
+[0064] Write key rate per second: 119.50K. Total:  87.97M
+[0065] Write key rate per second: 119.30K. Total:  89.16M
+[0066] Write key rate per second: 119.00K. Total:  90.35M
+[0067] Write key rate per second: 119.00K. Total:  91.54M
+[0068] Write key rate per second: 118.50K. Total:  92.73M
+[0069] Write key rate per second: 118.90K. Total:  93.92M
+[0070] Write key rate per second: 118.90K. Total:  95.11M
+[0071] Write key rate per second: 118.70K. Total:  96.30M
+[0072] Write key rate per second: 118.60K. Total:  97.48M
+[0073] Write key rate per second: 118.00K. Total:  98.66M
+[0074] Write key rate per second: 118.20K. Total:  99.85M
+[0075] Write key rate per second: 115.70K. Total: 100.00M
+real    12m32.334s
+user    6m33.120s
+sys     6m46.528s
+
+3.6GB
+
+time go run populate/main.go --kv rocksdb --valsz 0 --keys_mil 100 --dir=$DATADIR --read
+[0000] Write key rate per second: 238.90K. Total:   2.63M
+[0001] Write key rate per second: 115.20K. Total:   3.85M
+[0002] Write key rate per second:  89.70K. Total:   4.80M
+[0003] Write key rate per second:  73.50K. Total:   5.57M
+[0004] Write key rate per second:  70.50K. Total:   6.28M
+[0005] Write key rate per second:  51.90K. Total:   6.82M
+[0006] Write key rate per second: 120.10K. Total:   8.06M
+[0007] Write key rate per second:  93.80K. Total:   9.04M
+[0008] Write key rate per second:  74.60K. Total:   9.82M
+[0009] Write key rate per second:  69.30K. Total:  10.55M
+[0010] Write key rate per second:  60.60K. Total:  11.19M
+[0011] Write key rate per second:  56.40K. Total:  11.78M
+[0012] Write key rate per second:  52.50K. Total:  12.33M
+[0013] Write key rate per second:  42.40K. Total:  12.78M
+[0014] Write key rate per second:  41.90K. Total:  13.22M
+[0015] Write key rate per second:  85.70K. Total:  14.10M
+[0016] Write key rate per second:  90.80K. Total:  15.06M
+[0017] Write key rate per second:  75.20K. Total:  15.85M
+[0018] Write key rate per second:  68.70K. Total:  16.58M
+[0019] Write key rate per second:  60.00K. Total:  17.21M
+[0020] Write key rate per second:  56.60K. Total:  17.81M
+-------------------------- SNIP -------------------------
+[0160] Write key rate per second:  47.30K. Total:  90.57M
+[0161] Write key rate per second:  46.40K. Total:  91.06M
+[0162] Write key rate per second:  44.60K. Total:  91.53M
+[0163] Write key rate per second:  36.00K. Total:  91.91M
+[0164] Write key rate per second:  35.10K. Total:  92.28M
+[0165] Write key rate per second:  35.50K. Total:  92.66M
+[0166] Write key rate per second:  47.80K. Total:  93.15M
+[0167] Write key rate per second:  57.00K. Total:  93.75M
+[0168] Write key rate per second:  56.40K. Total:  94.34M
+[0169] Write key rate per second:  52.00K. Total:  94.89M
+[0170] Write key rate per second:  47.70K. Total:  95.39M
+[0171] Write key rate per second:  47.30K. Total:  95.89M
+[0172] Write key rate per second:  44.40K. Total:  96.36M
+[0173] Write key rate per second:  47.70K. Total:  96.86M
+[0174] Write key rate per second:  46.70K. Total:  97.35M
+[0175] Write key rate per second:  41.80K. Total:  97.79M
+[0176] Write key rate per second:  36.90K. Total:  98.17M
+[0177] Write key rate per second:  35.90K. Total:  98.55M
+[0178] Write key rate per second:  47.20K. Total:  99.04M
+[0179] Write key rate per second:  60.60K. Total:  99.68M
+[0180] Write key rate per second:  56.00K. Total: 100.00M
+real    30m7.010s
+user    47m56.238s
+sys     10m48.772s
+
+2.4GB
+
+
+
+---- 100M Random With history ---
+
+
+
+time go run populate/main.go --kv lmdb --valsz 0 --keys_mil 100 --dir=$DATADIR --read --history
+[0000] Write key rate per second: 252.90K. Total:   2.53M
+[0001] Write key rate per second: 198.90K. Total:   4.52M
+[0002] Write key rate per second: 180.80K. Total:   6.33M
+[0003] Write key rate per second: 165.40K. Total:   8.07M
+[0004] Write key rate per second: 154.90K. Total:   9.71M
+[0005] Write key rate per second: 155.40K. Total:  11.26M
+[0006] Write key rate per second: 147.40K. Total:  12.81M
+[0007] Write key rate per second: 153.80K. Total:  14.35M
+[0008] Write key rate per second: 143.60K. Total:  15.86M
+[0009] Write key rate per second: 146.70K. Total:  17.33M
+[0010] Write key rate per second: 143.00K. Total:  18.76M
+[0011] Write key rate per second: 140.60K. Total:  20.16M
+[0012] Write key rate per second: 139.40K. Total:  21.56M
+-------------------------- SNIP -------------------------
+[0064] Write key rate per second: 117.50K. Total:  86.53M
+[0065] Write key rate per second: 117.50K. Total:  87.71M
+[0066] Write key rate per second: 117.30K. Total:  88.88M
+[0067] Write key rate per second: 117.30K. Total:  90.06M
+[0068] Write key rate per second: 111.40K. Total:  91.23M
+[0069] Write key rate per second: 117.10K. Total:  92.40M
+[0070] Write key rate per second: 117.10K. Total:  93.57M
+[0071] Write key rate per second: 111.20K. Total:  94.74M
+[0072] Write key rate per second: 111.00K. Total:  95.91M
+[0073] Write key rate per second: 116.90K. Total:  97.08M
+[0074] Write key rate per second: 110.60K. Total:  98.24M
+[0075] Write key rate per second: 116.60K. Total:  99.41M
+[0076] Write key rate per second: 111.80K. Total: 100.00M
+real    12m46.187s
+user    6m38.187s
+sys     6m55.504s
+
+5.2G
+
+time go run populate/main.go --kv badger --valsz 0 --keys_mil 100 --dir=$DATADIR --read --history
+[0000] Write key rate per second: 254.90K. Total:   2.55M
+[0001] Write key rate per second: 220.90K. Total:   4.76M
+[0002] Write key rate per second: 160.50K. Total:   6.36M
+[0003] Write key rate per second: 147.60K. Total:   7.89M
+[0004] Write key rate per second: 188.00K. Total:   9.87M
+[0005] Write key rate per second: 171.00K. Total:  11.78M
+[0006] Write key rate per second:  92.60K. Total:  12.71M
+[0007] Write key rate per second:  55.10K. Total:  13.20M
+[0008] Write key rate per second: 184.40K. Total:  15.04M
+[0009] Write key rate per second: 175.10K. Total:  16.84M
+[0010] Write key rate per second: 129.80K. Total:  18.13M
+[0011] Write key rate per second:  70.10K. Total:  18.84M
+[0012] Write key rate per second: 116.10K. Total:  20.00M
+[0013] Write key rate per second: 142.10K. Total:  21.46M
+[0014] Write key rate per second: 166.20K. Total:  23.21M
+[0015] Write key rate per second:  93.20K. Total:  24.15M
+-------------------------- SNIP -------------------------
+[0093] Write key rate per second:  78.40K. Total:  89.38M
+[0094] Write key rate per second:  83.50K. Total:  90.22M
+[0095] Write key rate per second:  48.80K. Total:  90.71M
+[0096] Write key rate per second:  53.00K. Total:  91.24M
+[0097] Write key rate per second: 105.90K. Total:  92.33M
+[0098] Write key rate per second:  57.70K. Total:  92.91M
+[0099] Write key rate per second:  95.30K. Total:  93.86M
+[0100] Write key rate per second:  13.60K. Total:  94.00M
+[0101] Write key rate per second:  58.30K. Total:  94.58M
+[0102] Write key rate per second:  90.80K. Total:  95.49M
+[0103] Write key rate per second:  75.70K. Total:  96.25M
+[0104] Write key rate per second:  34.00K. Total:  96.59M
+[0105] Write key rate per second:   9.30K. Total:  96.68M
+[0106] Write key rate per second:  90.20K. Total:  97.59M
+[0107] Write key rate per second: 116.10K. Total:  98.75M
+[0108] Write key rate per second:  84.60K. Total:  99.59M
+[0109] Write key rate per second:  50.50K. Total: 100.00M
+real    18m23.432s
+user    35m5.264s
+sys     0m46.388s
+
+8.0G
+
+
+
+--- 100M History Only ---
+
+
+
+time go run populate/main.go --kv leveldb --valsz 0 --keys_mil 100 --dir=$DATADIR --tsonly
+[0000] Write key rate per second:   5.28M. Total:  52.76M
+[0001] Write key rate per second:   4.72M. Total: 100.00M
+real    0m20.944s
+user    0m20.970s
+sys     0m3.573s
+
+1.5G
+
+time go run populate/main.go --kv lmdb --valsz 0 --keys_mil 100 --dir=$DATADIR --tsonly
+[0000] Write key rate per second:   7.68M. Total:  76.78M
+[0001] Write key rate per second:   7.33M. Total: 100.00M
+real    0m14.160s
+user    0m17.989s
+sys     0m2.624s
+
+1.6G
+
+time go run populate/main.go --kv rocksdb --valsz 0 --keys_mil 100 --dir=$DATADIR --tsonly
+[0000] Write key rate per second:   5.11M. Total:  51.06M
+[0001] Write key rate per second:   4.62M. Total:  97.30M
+[0002] Write key rate per second:   4.76M. Total: 100.00M
+real    0m22.149s
+user    0m27.817s
+sys     0m3.768s
+
+1.5G
+
+time go run populate/main.go --kv bolt --valsz 0 --keys_mil 100 --dir=$DATADIR --tsonly
+[0000] Write key rate per second:   1.04M. Total:  10.37M
+[0001] Write key rate per second:   1.01M. Total:  20.51M
+[0002] Write key rate per second: 992.00K. Total:  30.46M
+[0003] Write key rate per second: 969.60K. Total:  40.16M
+[0004] Write key rate per second: 966.40K. Total:  49.86M
+[0005] Write key rate per second: 960.00K. Total:  59.46M
+[0006] Write key rate per second: 960.00K. Total:  69.09M
+[0007] Write key rate per second: 966.40K. Total:  78.78M
+[0008] Write key rate per second: 966.40K. Total:  88.45M
+[0009] Write key rate per second: 960.00K. Total:  98.05M
+[0010] Write key rate per second: 960.00K. Total: 100.00M
+real    1m43.066s
+user    1m52.300s
+sys     0m2.815s
+
+1.6G
+
+time go run populate/main.go --kv badger --valsz 0 --keys_mil 100 --dir=$DATADIR --tsonly
+[0000] Write key rate per second:   7.20M. Total:  72.03M
+[0001] Write key rate per second:   7.13M. Total: 100.00M
+real    0m15.040s
+user    0m21.095s
+sys     0m2.720s
+
+1.5G
+
+
+
+--- 10M With History ---
+
+
+
+time go run populate/main.go --kv lmdb --valsz 0 --keys_mil 10 --dir=$DATADIR --read --history
+[0000] Write key rate per second: 251.60K. Total:   2.52M
+[0001] Write key rate per second: 198.80K. Total:   4.50M
+[0002] Write key rate per second: 171.30K. Total:   6.31M
+[0003] Write key rate per second: 163.30K. Total:   8.03M
+[0004] Write key rate per second: 161.00K. Total:   9.64M
+[0005] Write key rate per second: 157.50K. Total:  10.02M
+real    0m53.347s
+user    0m31.179s
+sys     0m26.730s
+
+538M
+
+
+time go run populate/main.go --kv rocksdb --valsz 0 --keys_mil 10 --dir=$DATADIR --read --history
+[0000] Write key rate per second: 235.40K. Total:   2.35M
+[0001] Write key rate per second: 104.40K. Total:   3.40M
+[0002] Write key rate per second:  80.40K. Total:   4.21M
+[0003] Write key rate per second:  63.10K. Total:   4.84M
+[0004] Write key rate per second: 102.50K. Total:   5.87M
+[0005] Write key rate per second:  95.40K. Total:   6.83M
+[0006] Write key rate per second:  75.40K. Total:   7.58M
+[0007] Write key rate per second:  65.10K. Total:   8.24M
+[0008] Write key rate per second:  59.60K. Total:   8.83M
+[0009] Write key rate per second:  47.30K. Total:   9.31M
+[0010] Write key rate per second:  44.30K. Total:   9.75M
+[0011] Write key rate per second:  55.00K. Total:  10.02M
+real    1m54.643s
+user    3m2.968s
+sys     0m37.305s
+
+390M
+
+time go run populate/main.go --kv leveldb --valsz 0 --keys_mil 10 --dir=$DATADIR --read --history
+[0000] Write key rate per second: 106.00K. Total:   1.06M
+[0001] Write key rate per second:  66.20K. Total:   1.72M
+[0002] Write key rate per second:  58.90K. Total:   2.31M
+[0003] Write key rate per second:  52.00K. Total:   2.84M
+[0004] Write key rate per second:  46.80K. Total:   3.30M
+[0005] Write key rate per second:  44.80K. Total:   3.75M
+[0006] Write key rate per second:  40.70K. Total:   4.16M
+[0007] Write key rate per second:  36.70K. Total:   4.53M
+[0008] Write key rate per second:  34.00K. Total:   4.87M
+[0009] Write key rate per second:  36.20K. Total:   5.23M
+[0010] Write key rate per second:  34.70K. Total:   5.58M
+[0011] Write key rate per second:  34.50K. Total:   5.93M
+[0012] Write key rate per second:  31.20K. Total:   6.26M
+[0013] Write key rate per second:  32.40K. Total:   6.58M
+[0014] Write key rate per second:  30.30K. Total:   6.89M
+[0015] Write key rate per second:  28.40K. Total:   7.17M
+[0016] Write key rate per second:  33.70K. Total:   7.51M
+[0017] Write key rate per second:  31.20K. Total:   7.82M
+[0018] Write key rate per second:  27.60K. Total:   8.11M
+[0019] Write key rate per second:  29.10K. Total:   8.40M
+[0020] Write key rate per second:  29.30K. Total:   8.70M
+[0021] Write key rate per second:  28.40K. Total:   8.98M
+[0022] Write key rate per second:  28.80K. Total:   9.27M
+[0023] Write key rate per second:  30.00K. Total:   9.57M
+[0024] Write key rate per second:  28.10K. Total:   9.85M
+[0025] Write key rate per second:  29.60K. Total:  10.02M
+real    4m16.145s
+user    7m37.502s
+sys     0m36.642s
+
+231M
+
+
+time go run populate/main.go --kv badger --valsz 0 --keys_mil 10 --dir=$DATADIR --read --history
+[0000] Write key rate per second: 255.90K. Total:   2.56M
+[0001] Write key rate per second: 207.50K. Total:   4.76M
+[0002] Write key rate per second: 157.50K. Total:   6.40M
+[0003] Write key rate per second: 155.70K. Total:   8.01M
+[0004] Write key rate per second: 201.10K. Total:  10.02M
+real    0m55.983s
+user    1m41.263s
+sys     0m2.768s
+
+819M
