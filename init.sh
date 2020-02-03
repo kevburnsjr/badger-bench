@@ -20,8 +20,6 @@ alias ..="cd .."
 export DATADIR=/data
 export DATADIREBS=/data-ebs
 EOF
-echo "export LD_LIBRARY_PATH=/home/ec2-user/rocksdb-$ROCKSVERSION/" >> ~/.bashrc
-source ~/.bashrc
 
 export ROCKSVERSION=5.1.4
 wget https://github.com/facebook/rocksdb/archive/v$ROCKSVERSION.tar.gz
@@ -31,6 +29,9 @@ export USE_RTTI=1 && make shared_lib
 sudo make install-shared
 sudo ldconfig # to update ld.so.cache
 
+echo "export LD_LIBRARY_PATH=/home/ec2-user/rocksdb-$ROCKSVERSION/" >> ~/.bashrc
+source ~/.bashrc
+
 wget https://storage.googleapis.com/golang/go1.13.7.linux-amd64.tar.gz
 sudo tar -C /usr/local -xzf go1.13.7.linux-amd64.tar.gz
 sudo ln -s /usr/local/go/bin/go /usr/bin/go
@@ -38,13 +39,15 @@ sudo mkdir /usr/local/share/go
 sudo mkdir /usr/local/share/go/bin
 sudo chmod 777 /usr/local/share/go
 
+cd ~/badger-bench
+go mod init github.com/dgraph-io/badger-bench
+
 exit
 
 # Copy/paste this
 sudo yum install -y git
 git clone https://github.com/kevburnsjr/badger-bench
-cd badger-bench
-go mod init github.com/dgraph-io/badger-bench
+cd ~/badger-bench
 chmod +x init.sh
 ./init.sh
 

@@ -47,6 +47,7 @@ var (
 	syncEvery = flag.Int("sync-every", 0, "Number of batches after which to force sync")
 	n         = flag.Int("n", 32, "Number of concurrent writers")
 	a         = flag.Bool("a", false, "Do not delete existing database (append)")
+	partition = flag.Bool("p", false, "Partition per writer")
 )
 
 type entry struct {
@@ -63,7 +64,7 @@ func Reverse(s string) string {
     return string(runes)
 }
 
-func fillEntry(e *entry) {
+func fillEntry(e *entry, workerNum int) {
 	// k := rand.Int() % int(*numKeys*mil)
 	// key := fmt.Sprintf("vsz=%05d-k=%010d", *valueSize, k) // 22 bytes.
 	// if cap(e.Key) < len(key) {
@@ -76,6 +77,9 @@ func fillEntry(e *entry) {
 	} else {
 		rand.Read(e.Key)
 	}
+	if *n > 0 {
+		e.Key[0] -= e.Key[0] % byte(workerNum+1)
+	}
 	rand.Read(e.Value)
 	e.Meta = 0
 }
@@ -83,15 +87,21 @@ func fillEntry(e *entry) {
 var bdb *badger.DB
 
 var rdb *store.Store
+var rdbs = map[int]*store.Store{}
+var rdbhistory *store.Store
+var rdbhistories = map[int]*store.Store{}
 var boltdb *bolt.DB
 var ldb *leveldb.DB
 var lmdbEnv *lmdb.Env
 var lmdbDBI lmdb.DBI
 var lmdbDBIHistory lmdb.DBI
+var lmdbEnvs = map[int]*lmdb.Env{}
+var lmdbDBIs = map[int]lmdb.DBI{}
+var lmdbDBIHistories = map[int]lmdb.DBI{}
 
-func writeBatch(entries []*entry, batchNum int) int {
+func writeBatch(entries []*entry, batchNum, workerNum int) int {
 	for _, e := range entries {
-		fillEntry(e)
+		fillEntry(e, workerNum)
 	}
 	var err error
 	var keylen = len(entries[0].Key)
@@ -99,6 +109,16 @@ func writeBatch(entries []*entry, batchNum int) int {
 
 	var ts = make([]byte, 8)
 	binary.BigEndian.PutUint64(ts, uint64(time.Now().UnixNano()))
+
+	var lmdbEnv = lmdbEnv
+	if len(lmdbEnvs) > 0 {
+		lmdbEnv = lmdbEnvs[workerNum]
+	}
+
+	var rdb = rdb
+	if len(rdbs) > 0 {
+		rdb = rdbs[workerNum]
+	}
 
 	// Badger
 	if bdb != nil {
@@ -157,6 +177,10 @@ func writeBatch(entries []*entry, batchNum int) int {
 
 	// RocksDB
 	if rdb != nil {
+		var rdbhistory = rdbhistory
+		if len(rdbhistories) > 0 {
+			rdbhistory = rdbhistories[workerNum]
+		}
 		rb := rdb.NewWriteBatch()
 		defer rb.Destroy()
 		for i, e := range entries {
@@ -177,8 +201,9 @@ func writeBatch(entries []*entry, batchNum int) int {
 			copy(keys[i*keylen:i*keylen+keylen], e.Key)
 		}
 		if *history || *tsonly {
-			rb.Put(ts, keys)
+			y.Check(rdbhistory.SetOne(ts, keys))
 		}
+		rb.Put([]byte("checkpoint"), ts)
 		y.Check(rdb.WriteBatch(rb))
 	}
 
@@ -216,6 +241,14 @@ func writeBatch(entries []*entry, batchNum int) int {
 
 	// LMDB
 	if lmdbEnv != nil {
+		var lmdbDBI = lmdbDBI
+		if len(lmdbDBIs) > 0 {
+			lmdbDBI = lmdbDBIs[workerNum]
+		}
+		var lmdbDBIHistory = lmdbDBIHistory
+		if len(lmdbDBIHistories) > 0 {
+			lmdbDBIHistory = lmdbDBIHistories[workerNum]
+		}
 		err := lmdbEnv.Update(func(txn *lmdb.Txn) error {
 			for i, e := range entries {
 				if *withRead {
@@ -245,7 +278,6 @@ func writeBatch(entries []*entry, batchNum int) int {
 			return nil
 		})
 		if *syncEvery > 0 && batchNum % *syncEvery == 0 {
-			println("sync")
 			lmdbEnv.Sync(true)
 		}
 		y.Check(err)
@@ -315,6 +347,10 @@ func main() {
 	}
 	fmt.Printf("BATCH SIZE %d\n", *batchSize)
 	fmt.Printf("CONCURRENCY %d\n", *n)
+	fmt.Printf("KEY SIZE %d\n", *keySize)
+	if *partition {
+		fmt.Printf("PARTITIONED\n")
+	}
 	if *a {
 		fmt.Printf("APPEND\n")
 	}
@@ -344,12 +380,31 @@ func main() {
 			os.RemoveAll(*dir + "/rocks")
 			os.MkdirAll(*dir+"/rocks", 0777)
 		}
-		if *syncWrite {
-			rdb, err = store.NewSyncStore(*dir + "/rocks")
+		if *partition {
+			for i := 0; i < *n; i++ {
+				d := fmt.Sprintf(*dir+"/rocks/%d", i)
+				os.MkdirAll(d, 0777)
+				if *syncWrite {
+					rdbs[i], err = store.NewSyncStore(d)
+				} else {
+					rdbs[i], err = store.NewStore(d)
+				}
+				y.Check(err)
+				d = fmt.Sprintf(*dir+"/rocks/%d.ts", i)
+				os.MkdirAll(d, 0777)
+				rdbhistories[i], err = store.NewSyncStore(d)
+				y.Check(err)
+			}
 		} else {
-			rdb, err = store.NewStore(*dir + "/rocks")
+			if *syncWrite {
+				rdb, err = store.NewSyncStore(*dir + "/rocks")
+			} else {
+				rdb, err = store.NewStore(*dir + "/rocks")
+			}
+			y.Check(err)
+			rdbhistory, err = store.NewSyncStore(*dir + "/rocks.ts")
+			y.Check(err)
 		}
-		y.Check(err)
 	} else if *which == "bolt" {
 		init = true
 		fmt.Println("Init BoltDB")
@@ -386,31 +441,57 @@ func main() {
 			os.RemoveAll(*dir + "/lmdb")
 			os.MkdirAll(*dir+"/lmdb", 0777)
 		}
-
-		lmdbEnv, err = lmdb.NewEnv()
-		y.Check(err)
-		err = lmdbEnv.SetMaxDBs(2)
-		y.Check(err)
-		err = lmdbEnv.SetMapSize(1 << 38) // ~273Gb
-		y.Check(err)
 		o := lmdb.NoReadahead
 		if !*syncWrite {
 			o |= lmdb.NoSync
 		}
-		err = lmdbEnv.Open(*dir+"/lmdb", uint(o), 0777)
-		y.Check(err)
-
-		// Acquire handle
-		err := lmdbEnv.Update(func(txn *lmdb.Txn) error {
-			var err error
-			lmdbDBI, err = txn.CreateDBI("bench")
-			if err != nil {
-				return nil
+		if *partition {
+			for i := 0; i < *n; i++ {
+				d := fmt.Sprintf(*dir+"/lmdb/%d", i)
+				os.MkdirAll(d, 0777)
+				lmdbEnv, err := lmdb.NewEnv()
+				y.Check(err)
+				err = lmdbEnv.SetMaxDBs(2)
+				y.Check(err)
+				err = lmdbEnv.SetMapSize(1 << 34) // ~4Gb
+				y.Check(err)
+				err = lmdbEnv.Open(d, uint(o), 0777)
+				y.Check(err)
+				// Acquire handle
+				err = lmdbEnv.Update(func(txn *lmdb.Txn) error {
+					var err error
+					lmdbDBIs[i], err = txn.CreateDBI("bench")
+					if err != nil {
+						return nil
+					}
+					lmdbDBIHistories[i], err = txn.CreateDBI("bench-history")
+					return err
+				})
+				y.Check(err)
+				lmdbEnvs[i] = lmdbEnv
 			}
-			lmdbDBIHistory, err = txn.CreateDBI("bench-history")
-			return err
-		})
-		y.Check(err)
+		} else {
+			lmdbEnv, err = lmdb.NewEnv()
+			y.Check(err)
+			err = lmdbEnv.SetMaxDBs(2)
+			y.Check(err)
+			err = lmdbEnv.SetMapSize(1 << 38) // ~273Gb
+			y.Check(err)
+			err = lmdbEnv.Open(*dir+"/lmdb", uint(o), 0777)
+			y.Check(err)
+
+			// Acquire handle
+			err := lmdbEnv.Update(func(txn *lmdb.Txn) error {
+				var err error
+				lmdbDBI, err = txn.CreateDBI("bench")
+				if err != nil {
+					return nil
+				}
+				lmdbDBIHistory, err = txn.CreateDBI("bench-history")
+				return err
+			})
+			y.Check(err)
+		}
 	} else {
 		log.Fatalf("Invalid value for option kv: '%s'", *which)
 	}
@@ -468,7 +549,7 @@ func main() {
 
 			var written float64
 			for written < nw/float64(N) {
-				wrote := float64(writeBatch(entries, int(written / float64(*batchSize))))
+				wrote := float64(writeBatch(entries, int(written / float64(*batchSize)), proc))
 
 				wi := int64(wrote)
 				atomic.AddInt64(&counter, wi)
