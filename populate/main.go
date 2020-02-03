@@ -34,14 +34,17 @@ var (
 	which     = flag.String("kv", "", "Which KV store to use. Options: badger, rocksdb, bolt, leveldb, lmdb")
 	numKeys   = flag.Float64("keys_mil", 10.0, "How many million keys to write.")
 	valueSize = flag.Int("valsz", 128, "Value size in bytes.")
+	keySize   = flag.Int("keysz", 16, "Key size in bytes.")
 	dir       = flag.String("dir", "", "Base dir for writes.")
 	mode      = flag.String("profile.mode", "", "enable profiling mode, one of [cpu, mem, mutex, block]")
 	withRead  = flag.Bool("read", false, "Read each key prior to write.")
+	readOther = flag.Bool("read-other", false, "Read an unrelated key prior to each write.")
 	seqKeys   = flag.Bool("keys_seq", false, "Use sequential keys.")
 	history   = flag.Bool("history", false, "Store history.")
 	batchSize = flag.Int("batchsize", 1000, "Batch Size")
 	tsonly    = flag.Bool("tsonly", false, "Store timeseries only")
 	syncWrite = flag.Bool("sync", false, "Strong durability")
+	syncEvery = flag.Int("sync-every", 0, "Number of batches after which to force sync")
 	n         = flag.Int("n", 32, "Number of concurrent writers")
 	a         = flag.Bool("a", false, "Do not delete existing database (append)")
 )
@@ -50,6 +53,14 @@ type entry struct {
 	Key   []byte
 	Value []byte
 	Meta  byte
+}
+
+func Reverse(s string) string {
+    runes := []rune(s)
+    for i, j := 0, len(runes)-1; i < j; i, j = i+1, j-1 {
+        runes[i], runes[j] = runes[j], runes[i]
+    }
+    return string(runes)
 }
 
 func fillEntry(e *entry) {
@@ -78,7 +89,7 @@ var lmdbEnv *lmdb.Env
 var lmdbDBI lmdb.DBI
 var lmdbDBIHistory lmdb.DBI
 
-func writeBatch(entries []*entry) int {
+func writeBatch(entries []*entry, batchNum int) int {
 	for _, e := range entries {
 		fillEntry(e)
 	}
@@ -95,7 +106,11 @@ func writeBatch(entries []*entry) int {
 
 		for i, e := range entries {
 			if *withRead {
-				_, err = txn.Get(e.Key)
+				k := e.Key
+				if *readOther {
+					k = []byte(Reverse(string(k)))
+				}
+				_, err = txn.Get(k)
 				if err == nil {
 					println("duplicate")
 					continue
@@ -117,7 +132,11 @@ func writeBatch(entries []*entry) int {
 		batch := new(leveldb.Batch)
 		for i, e := range entries {
 			if *withRead {
-				_, err = ldb.Get(e.Key, nil)
+				k := e.Key
+				if *readOther {
+					k = []byte(Reverse(string(k)))
+				}
+				_, err = ldb.Get(k, nil)
 				if err == nil {
 					println("duplicate")
 					continue
@@ -142,7 +161,11 @@ func writeBatch(entries []*entry) int {
 		defer rb.Destroy()
 		for i, e := range entries {
 			if *withRead {
-				v, _ := rdb.Get(e.Key)
+				k := e.Key
+				if *readOther {
+					k = []byte(Reverse(string(k)))
+				}
+				v, _ := rdb.Get(k)
 				if v.Size() > 0 {
 					println("duplicate")
 					continue
@@ -165,7 +188,11 @@ func writeBatch(entries []*entry) int {
 			boltBkt := txn.Bucket([]byte("bench"))
 			y.AssertTrue(boltBkt != nil)
 			for i, e := range entries {
-				v := boltBkt.Get(e.Key)
+				k := e.Key
+				if *readOther {
+					k = []byte(Reverse(string(k)))
+				}
+				v := boltBkt.Get(k)
 				if len(v) > 0 {
 					println("duplicate")
 					continue
@@ -192,7 +219,11 @@ func writeBatch(entries []*entry) int {
 		err := lmdbEnv.Update(func(txn *lmdb.Txn) error {
 			for i, e := range entries {
 				if *withRead {
-					_, err = txn.Get(lmdbDBI, e.Key)
+					k := e.Key
+					if *readOther {
+						k = []byte(Reverse(string(k)))
+					}
+					_, err = txn.Get(lmdbDBI, k)
 					if err == nil {
 						println("duplicate")
 						continue
@@ -213,6 +244,10 @@ func writeBatch(entries []*entry) int {
 			}
 			return nil
 		})
+		if *syncEvery > 0 && batchNum % *syncEvery == 0 {
+			println("sync")
+			lmdbEnv.Sync(true)
+		}
 		y.Check(err)
 	}
 
@@ -263,6 +298,9 @@ func main() {
 	fmt.Printf("WITH VALUE SIZE: %s\n", humanize(int64(*valueSize)))
 	if *withRead {
 		fmt.Printf("WITH READ\n")
+	}
+	if *readOther {
+		fmt.Printf("WITH READ OTHER\n")
 	}
 	if *history {
 		fmt.Printf("WITH HISTORY\n")
@@ -422,7 +460,7 @@ func main() {
 				if *seqKeys {
 					e.Key = make([]byte, 8)
 				} else {
-					e.Key = make([]byte, 16)
+					e.Key = make([]byte, *keySize)
 				}
 				e.Value = make([]byte, *valueSize)
 				entries[i] = e
@@ -430,7 +468,7 @@ func main() {
 
 			var written float64
 			for written < nw/float64(N) {
-				wrote := float64(writeBatch(entries))
+				wrote := float64(writeBatch(entries, int(written / float64(*batchSize))))
 
 				wi := int64(wrote)
 				atomic.AddInt64(&counter, wi)
