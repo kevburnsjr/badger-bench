@@ -1,11 +1,6 @@
 cd ~
 
-sudo yum install -y gcc48-c++ git htop iotop atop snappy snappy-devel zlib zlib-devel bzip2 bzip2-devel lz4-devel sysstat
-
-sudo mkfs -t ext4 /dev/nvme1n1
-sudo mkdir /data
-sudo mount /dev/nvme1n1 /data
-sudo chown ec2-user:ec2-user /data
+sudo yum install -y gcc-c++ git htop iotop atop snappy snappy-devel zlib zlib-devel bzip2 bzip2-devel lz4-devel sysstat
 
 sudo mkdir /data-ebs
 sudo chown ec2-user:ec2-user /data-ebs
@@ -33,7 +28,7 @@ echo "export LD_LIBRARY_PATH=/home/ec2-user/rocksdb-$ROCKSVERSION/" >> ~/.bashrc
 source ~/.bashrc
 
 wget https://storage.googleapis.com/golang/go1.13.7.linux-amd64.tar.gz
-sudo tar -C /usr/local -xzf go1.13.7.linux-amd64.tar.gz
+sudo tar -C /usr/local -xzf go1.13.7.linux-arm64.tar.gz
 sudo ln -s /usr/local/go/bin/go /usr/bin/go
 sudo mkdir /usr/local/share/go
 sudo mkdir /usr/local/share/go/bin
@@ -51,8 +46,7 @@ cd ~/badger-bench
 chmod +x init.sh
 ./init.sh
 
-
-sudo mkfs -t ext2 /dev/nvme2n1
-sudo mkdir /data-ebs
-sudo mount /dev/nvme2n1 /data-ebs
-sudo chown ec2-user:ec2-user /data-ebs
+sudo mkfs -t ext4 /dev/sdf
+sudo mkdir /data
+sudo mount /dev/sdf /data
+sudo chown ec2-user:ec2-user /data
