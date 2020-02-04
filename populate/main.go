@@ -376,6 +376,7 @@ func main() {
 	} else if *which == "rocksdb" {
 		init = true
 		fmt.Println("Init Rocks")
+		start := time.Now()
 		if !*a {
 			os.RemoveAll(*dir + "/rocks")
 			os.MkdirAll(*dir+"/rocks", 0777)
@@ -405,6 +406,7 @@ func main() {
 			rdbhistory, err = store.NewSyncStore(*dir + "/rocks.ts")
 			y.Check(err)
 		}
+		fmt.Printf("Initialized after %v", time.Now().Sub(start))
 	} else if *which == "bolt" {
 		init = true
 		fmt.Println("Init BoltDB")

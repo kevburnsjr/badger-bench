@@ -1710,3 +1710,47 @@ user    17m22.572s
 sys     0m27.748s
 
 2.7G
+
+
+
+--- Loaded Database Test - Adding 100M keys to DB w/ 5B Keys - w/ 1:1 Read w/ 16 Partitions w/ Key Size 12 (EBS) ---
+
+Existing Database is 76G
+
+
+
+> time go run populate/main.go --kv rocksdb --valsz 0 --keys_mil 100 --dir=$DATADIREBS -keysz 12 -read -n 16 -p -a
+Initialized after 2.392146559s
+[0000] Write key rate per second:  0.00. Total:  0.00
+[0001] Write key rate per second:  0.00. Total:  0.00
+[0002] Write key rate per second:  0.00. Total:  0.00
+[0003] Write key rate per second:  0.00. Total:  0.00
+[0004] Write key rate per second:  0.00. Total:  0.00
+[0005] Write key rate per second:  0.00. Total:  0.00
+[0006] Write key rate per second: 100.00. Total:   1.00K
+[0007] Write key rate per second:  0.00. Total:   1.00K
+[0008] Write key rate per second:  0.00. Total:   1.00K
+[0009] Write key rate per second:  0.00. Total:   1.00K
+[0010] Write key rate per second: 100.00. Total:   2.00K
+[0011] Write key rate per second: 100.00. Total:   3.00K
+[0012] Write key rate per second: 500.00. Total:   8.00K
+-------------------------- SNIP -------------------------
+[0057] Write key rate per second: 400.00. Total: 156.00K
+[0058] Write key rate per second: 700.00. Total: 163.00K
+[0059] Write key rate per second: 500.00. Total: 168.00K
+[0060] Write key rate per second: 500.00. Total: 173.00K
+[0061] Write key rate per second: 600.00. Total: 179.00K
+[0062] Write key rate per second: 500.00. Total: 184.00K
+[0063] Write key rate per second: 500.00. Total: 189.00K
+[0064] Write key rate per second: 600.00. Total: 195.00K
+[0065] Write key rate per second: 400.00. Total: 199.00K
+[0066] Write key rate per second: 500.00. Total: 204.00K
+[0067] Write key rate per second: 700.00. Total: 211.00K
+[0068] Write key rate per second: 400.00. Total: 215.00K
+[0069] Write key rate per second: 500.00. Total: 221.00K
+real    11m51.121s
+user    10m53.119s
+sys     1m57.775s
+
+Well, that was a mistake.
+We'll need to bucket.

@@ -35,6 +35,7 @@ type Store struct {
 func (s *Store) setOpts() {
 	s.opt = rdb.NewDefaultOptions()
 	s.blockopt = rdb.NewDefaultBlockBasedTableOptions()
+	s.blockopt.SetNoBlockCache(true)
 	s.opt.SetBlockBasedTableFactory(s.blockopt)
 
 	// If you want to access blockopt.blockCache, you need to grab handles to them
@@ -44,8 +45,8 @@ func (s *Store) setOpts() {
 	// s.blockopt.SetBlockCacheCompressed(rocksdb.NewLRUCache(blockCacheSize))
 
 	s.opt.SetCreateIfMissing(true)
-	fp := rdb.NewBloomFilter(16)
-	s.blockopt.SetFilterPolicy(fp)
+	// fp := rdb.NewBloomFilter(16)
+	// s.blockopt.SetFilterPolicy(fp)
 
 	s.ropt = rdb.NewDefaultReadOptions()
 	s.wopt = rdb.NewDefaultWriteOptions()
