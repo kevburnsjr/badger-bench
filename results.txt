@@ -1713,10 +1713,9 @@ sys     0m27.748s
 
 
 
---- Loaded Database Test - Adding 100M keys to DB w/ 5B Keys - w/ 1:1 Read w/ 16 Partitions w/ Key Size 12 (EBS) ---
+--- Loaded Database Test - Adding 100M keys to DB w/ 5B Keys - w/ 1:1 Read w/ 16 Partitions w/ 256M buckets w/ Key Size 12 (EBS) ---
 
 Existing Database is 76G
-
 
 
 > time go run populate/main.go --kv rocksdb --valsz 0 --keys_mil 100 --dir=$DATADIREBS -keysz 12 -read -n 16 -p -a
@@ -1754,3 +1753,973 @@ sys     1m57.775s
 
 Well, that was a mistake.
 We'll need to bucket.
+
+
+
+--- 100M Keys w/ 4 Byte Buckets w/ 1:1 Read w/ 16 Partitions w/ 256M buckets w/ Key Size 12 w/ History (EBS) ---
+
+
+
+> time go run populate/main.go --kv lmdb --valsz 0 --keys_mil 100 --dir=$DATADIREBS -keysz 12 -read -n 16 -p -history
+[0000] Write key rate per second: 270.90K. Total:   2.96M    Scan Rate: 339.00
+[0001] Write key rate per second: 215.90K. Total:   5.23M    Scan Rate: 732.00
+[0002] Write key rate per second: 202.50K. Total:   7.38M    Scan Rate:   1.10K
+[0003] Write key rate per second: 203.50K. Total:   9.41M    Scan Rate:   1.36K
+[0004] Write key rate per second: 184.70K. Total:  11.34M    Scan Rate:   1.53K
+[0005] Write key rate per second: 180.70K. Total:  13.24M    Scan Rate:   1.85K
+[0006] Write key rate per second: 189.60K. Total:  15.13M    Scan Rate:   2.16K
+[0007] Write key rate per second: 177.90K. Total:  17.01M    Scan Rate:   2.26K
+[0008] Write key rate per second: 178.20K. Total:  18.87M    Scan Rate:   2.62K
+[0009] Write key rate per second: 182.30K. Total:  20.69M    Scan Rate:   2.80K
+[0010] Write key rate per second: 172.80K. Total:  22.51M    Scan Rate:   2.97K
+[0011] Write key rate per second: 170.40K. Total:  24.30M    Scan Rate:   3.26K
+[0012] Write key rate per second: 168.80K. Total:  26.08M    Scan Rate:   3.53K
+-------------------------- SNIP -------------------------
+[0173] Write key rate per second:   1.40K. Total:  49.67M    Scan Rate: 53.00
+[0174] Write key rate per second: 900.00.  Total:  49.68M    Scan Rate: 20.00
+[0175] Write key rate per second:   1.30K. Total:  49.69M    Scan Rate: 58.00
+[0176] Write key rate per second:   1.00K. Total:  49.70M    Scan Rate: 23.00
+[0177] Write key rate per second: 600.00.  Total:  49.71M    Scan Rate: 36.00
+[0178] Write key rate per second:   1.70K. Total:  49.72M    Scan Rate: 42.00
+[0179] Write key rate per second: 400.00.  Total:  49.73M    Scan Rate: 12.00
+[0180] Write key rate per second:   1.50K. Total:  49.74M    Scan Rate: 63.00
+[0181] Write key rate per second: 900.00.  Total:  49.75M    Scan Rate: 38.00
+[0182] Write key rate per second:   1.40K. Total:  49.77M    Scan Rate: 42.00
+[0183] Write key rate per second: 500.00.  Total:  49.77M    Scan Rate: 11.00
+[0184] Write key rate per second:   1.70K. Total:  49.79M    Scan Rate: 66.00
+[0185] Write key rate per second: 800.00.  Total:  49.80M    Scan Rate: 20.00
+real    31m10.698s
+user    5m24.652s
+sys     2m55.949s
+
+avg-cpu:  %user   %nice %system %iowait  %steal   %idle
+           0.00    0.00    0.05   99.95    0.00    0.00
+
+Device:            tps    MB_read/s    MB_wrtn/s    MB_read    MB_wrtn
+nvme0n1           0.00         0.00         0.00          0          0
+nvme1n1         437.80         0.00         4.60          0         46
+
+(EBS Volume Burst Balance exhausted - 300iops for 100gb disk)
+
+
+
+--- 100M Keys w/ 4 Byte Buckets w/ 1:1 Read w/ 16 Partitions w/ 256M buckets w/ 16 Volumes w/ Key Size 12 w/ History (EBS) ---
+
+
+
+> time go run populate/main.go --kv lmdb --valsz 0 --keys_mil 100 --dir=$DATADIREBS -keysz 12 -read -n 16 -p -history
+/data-ebs/0/lmdb
+/data-ebs/1/lmdb
+/data-ebs/2/lmdb
+/data-ebs/3/lmdb
+/data-ebs/4/lmdb
+/data-ebs/5/lmdb
+/data-ebs/6/lmdb
+/data-ebs/7/lmdb
+/data-ebs/8/lmdb
+/data-ebs/9/lmdb
+/data-ebs/a/lmdb
+/data-ebs/b/lmdb
+/data-ebs/c/lmdb
+/data-ebs/d/lmdb
+/data-ebs/e/lmdb
+/data-ebs/f/lmdb
+[0000] Write key rate per second: 255.30K. Total:   2.80M    Scan Rate: 306.00
+[0001] Write key rate per second: 208.30K. Total:   4.87M    Scan Rate: 584.00
+[0002] Write key rate per second: 184.40K. Total:   6.83M    Scan Rate: 903.00
+[0003] Write key rate per second: 180.70K. Total:   8.63M    Scan Rate:   1.11K
+[0004] Write key rate per second: 161.60K. Total:  10.25M    Scan Rate:   1.19K
+[0005] Write key rate per second: 146.40K. Total:  11.71M    Scan Rate:   1.24K
+[0006] Write key rate per second: 133.60K. Total:  13.06M    Scan Rate:   1.30K
+[0007] Write key rate per second: 124.40K. Total:  14.30M    Scan Rate:   1.30K
+[0008] Write key rate per second: 122.20K. Total:  15.53M    Scan Rate:   1.41K
+[0009] Write key rate per second: 117.40K. Total:  16.71M    Scan Rate:   1.54K
+[0010] Write key rate per second: 113.00K. Total:  17.84M    Scan Rate:   1.52K
+[0011] Write key rate per second: 109.00K. Total:  18.93M    Scan Rate:   1.53K
+[0012] Write key rate per second:  99.50K. Total:  19.98M    Scan Rate:   1.67K
+
+avg-cpu:  %user   %nice %system %iowait  %steal   %idle
+          40.95    0.00   57.79    1.26    0.00    0.00
+
+Device:            tps    MB_read/s    MB_wrtn/s    MB_read    MB_wrtn
+nvme0n1           0.00         0.00         0.00          0          0
+nvme12n1       1255.70         0.00        14.56          0        145
+nvme13n1       1247.60         0.00        16.42          0        164
+nvme14n1       1280.50         0.00        14.97          0        149
+nvme15n1       1217.10         0.00        14.17          0        141
+nvme16n1       1260.40         0.00        14.54          0        145
+nvme2n1        1339.50         0.00        15.14          0        151
+nvme3n1        1268.10         0.00        15.11          0        151
+nvme4n1        1224.90         0.00        16.20          0        162
+nvme5n1        1252.40         0.00        13.77          0        137
+nvme6n1        1216.00         0.00        15.30          0        153
+nvme7n1        1285.40         0.00        15.38          0        153
+nvme8n1        1158.00         0.00        14.83          0        148
+nvme9n1        1233.60         0.00        14.99          0        149
+nvme10n1       1194.40         0.00        14.97          0        149
+nvme11n1       1285.20         0.00        14.94          0        149
+nvme1n1        1283.00         0.00        14.32          0        143
+
+-------------------------- SNIP -------------------------
+[0065] Write key rate per second:  14.40K. Total:  47.38M    Scan Rate: 658.00
+[0066] Write key rate per second:  14.30K. Total:  47.52M    Scan Rate: 673.00
+[0067] Write key rate per second:  13.90K. Total:  47.66M    Scan Rate: 629.00
+[0068] Write key rate per second:  14.50K. Total:  47.80M    Scan Rate: 666.00
+[0069] Write key rate per second:  13.90K. Total:  47.94M    Scan Rate: 640.00
+[0070] Write key rate per second:  14.00K. Total:  48.08M    Scan Rate: 675.00
+[0071] Write key rate per second:  14.10K. Total:  48.23M    Scan Rate: 672.00
+[0072] Write key rate per second:  13.60K. Total:  48.36M    Scan Rate: 608.00
+[0073] Write key rate per second:  13.90K. Total:  48.50M    Scan Rate: 664.00
+[0074] Write key rate per second:  13.80K. Total:  48.64M    Scan Rate: 675.00
+[0075] Write key rate per second:  13.70K. Total:  48.78M    Scan Rate: 640.00
+[0076] Write key rate per second:  13.70K. Total:  48.91M    Scan Rate: 665.00
+[0077] Write key rate per second:  13.20K. Total:  49.05M    Scan Rate: 613.00
+
+
+avg-cpu:  %user   %nice %system %iowait  %steal   %idle
+           0.51    0.00    2.44   97.05    0.00    0.00
+
+Device:            tps    MB_read/s    MB_wrtn/s    MB_read    MB_wrtn
+nvme0n1           0.00         0.00         0.00          0          0
+nvme12n1        249.90         0.00         3.02          0         30
+nvme13n1        248.80         0.00         3.10          0         31
+nvme14n1        249.80         0.00         2.49          0         24
+nvme15n1        250.30         0.00         2.73          0         27
+nvme16n1        250.30         0.00         2.95          0         29
+nvme2n1         251.00         0.00         2.54          0         25
+nvme3n1         250.50         0.00         2.15          0         21
+nvme4n1         251.60         0.00         1.96          0         19
+nvme5n1         249.70         0.00         2.57          0         25
+nvme6n1         250.20         0.00         1.81          0         18
+nvme7n1         248.70         0.00         2.08          0         20
+nvme8n1         249.40         0.00         2.19          0         21
+nvme9n1         249.50         0.00         2.22          0         22
+nvme10n1        248.80         0.00         1.90          0         19
+nvme11n1        251.10         0.00         2.28          0         22
+nvme1n1         250.60         0.00         1.99          0         19
+
+(EC2 EBSIOBalance% exhausted) 13kps @ 4k iops baseline. Not tea bag.
+
+2.2G @ 49M keys
+
+> time go run populate/main.go --kv rocksdb --valsz 0 --keys_mil 100 --dir=$DATADIREBS -keysz 12 -read -n 16 -p
+[0000] Write key rate per second: 243.70K. Total:   2.44M    Scan Rate: 231.00
+[0001] Write key rate per second: 211.00K. Total:   4.55M    Scan Rate: 574.00
+[0002] Write key rate per second: 201.40K. Total:   6.57M    Scan Rate: 838.00
+[0003] Write key rate per second: 192.40K. Total:   8.49M    Scan Rate:   1.14K
+[0004] Write key rate per second: 190.50K. Total:  10.41M    Scan Rate:   1.38K
+[0005] Write key rate per second: 185.70K. Total:  12.27M    Scan Rate:   1.63K
+[0006] Write key rate per second: 180.50K. Total:  14.07M    Scan Rate:   1.88K
+[0007] Write key rate per second: 177.50K. Total:  15.85M    Scan Rate:   2.10K
+[0008] Write key rate per second: 166.70K. Total:  17.61M    Scan Rate:   2.31K
+[0009] Write key rate per second: 170.10K. Total:  19.30M    Scan Rate:   2.39K
+[0010] Write key rate per second: 170.50K. Total:  21.01M    Scan Rate:   2.65K
+[0011] Write key rate per second: 166.70K. Total:  22.68M    Scan Rate:   2.90K
+[0012] Write key rate per second: 162.70K. Total:  24.31M    Scan Rate:   3.00K
+-------------------------- SNIP -------------------------
+[0167] Write key rate per second:  20.10K. Total:  97.02M    Scan Rate:   1.61K
+[0168] Write key rate per second:  20.40K. Total:  97.23M    Scan Rate:   1.60K
+[0169] Write key rate per second:  20.10K. Total:  97.43M    Scan Rate:   1.61K
+[0170] Write key rate per second:  20.50K. Total:  97.63M    Scan Rate:   1.68K
+[0171] Write key rate per second:  22.20K. Total:  97.86M    Scan Rate:   1.89K
+[0172] Write key rate per second:  22.80K. Total:  98.08M    Scan Rate:   2.02K
+[0173] Write key rate per second:  23.30K. Total:  98.32M    Scan Rate:   2.04K
+[0174] Write key rate per second:  23.40K. Total:  98.55M    Scan Rate:   2.04K
+[0175] Write key rate per second:  24.90K. Total:  98.80M    Scan Rate:   2.13K
+[0176] Write key rate per second:  29.70K. Total:  99.10M    Scan Rate:   2.45K
+[0177] Write key rate per second:  29.90K. Total:  99.42M    Scan Rate:   2.71K
+[0178] Write key rate per second:  35.30K. Total:  99.77M    Scan Rate:   2.92K
+[0179] Write key rate per second:  32.20K. Total: 100.00M    Scan Rate:   2.49K
+real    30m0.735s
+user    45m7.533s
+sys     11m38.266s
+
+avg-cpu:  %user   %nice %system %iowait  %steal   %idle
+          65.98    0.00   31.47    1.90    0.00    0.65
+
+Device:            tps    MB_read/s    MB_wrtn/s    MB_read    MB_wrtn
+nvme0n1           4.60         0.16         0.00          1          0
+nvme12n1        775.60         3.52         0.02         35          0
+nvme13n1        740.30         3.32         0.02         33          0
+nvme14n1        802.60         3.65         0.02         36          0
+nvme15n1        775.80         3.56         0.02         35          0
+nvme16n1        810.70         3.71         0.02         37          0
+nvme2n1         796.50         3.65         0.02         36          0
+nvme3n1         845.00         3.92         0.02         39          0
+nvme4n1         696.70         3.10         0.02         30          0
+nvme5n1         836.00         3.81         0.02         38          0
+nvme6n1         805.00         3.67         0.02         36          0
+nvme7n1         845.90         3.90         0.02         38          0
+nvme8n1         831.50         3.88         0.02         38          0
+nvme9n1         735.80         3.31         0.02         33          0
+nvme10n1        791.30         3.62         0.02         36          0
+nvme11n1        801.70         3.68         0.02         36          0
+nvme1n1         881.70         4.17         0.02         41          0
+
+No throttling
+
+2.9G @ 100M keys
+
+
+
+--- 400M Keys w/ Append to previous test ---
+
+
+
+> time go run populate/main.go --kv rocksdb --valsz 0 --keys_mil 400 --dir=$DATADIREBS -keysz 12 -read -n 16 -p -a
+[0000] Write key rate per second:  35.20K. Total: 352.00K    Scan Rate:   5.24K
+[0001] Write key rate per second:  34.10K. Total: 697.00K    Scan Rate:   4.97K
+[0002] Write key rate per second:  34.10K. Total:   1.04M    Scan Rate:   5.02K
+[0003] Write key rate per second:  33.80K. Total:   1.38M    Scan Rate:   4.94K
+[0004] Write key rate per second:  34.00K. Total:   1.73M    Scan Rate:   5.07K
+[0005] Write key rate per second:  33.40K. Total:   2.06M    Scan Rate:   5.06K
+[0006] Write key rate per second:  34.30K. Total:   2.41M    Scan Rate:   5.23K
+[0007] Write key rate per second:  33.50K. Total:   2.74M    Scan Rate:   4.98K
+[0008] Write key rate per second:  33.40K. Total:   3.08M    Scan Rate:   4.77K
+[0009] Write key rate per second:  33.60K. Total:   3.42M    Scan Rate:   5.07K
+[0010] Write key rate per second:  32.60K. Total:   3.75M    Scan Rate:   4.76K
+[0011] Write key rate per second:  33.30K. Total:   4.09M    Scan Rate:   5.20K
+[0012] Write key rate per second:  32.90K. Total:   4.42M    Scan Rate:   4.89K
+
+avg-cpu:  %user   %nice %system %iowait  %steal   %idle
+          74.14    0.00   24.66    0.85    0.00    0.35
+
+Device:            tps    MB_read/s    MB_wrtn/s    MB_read    MB_wrtn
+nvme0n1           5.10         0.06         0.01          0          0
+nvme12n1        659.50         3.30         0.02         32          0
+nvme13n1        675.10         3.37         0.02         33          0
+nvme14n1        627.40         2.90         0.04         28          0
+nvme15n1        669.70         3.13         0.03         31          0
+nvme16n1        640.30         2.95         0.04         29          0
+nvme2n1         654.70         3.04         0.03         30          0
+nvme3n1         448.00         2.20         6.51         22         65
+nvme4n1         660.40         3.02         0.04         30          0
+nvme5n1         573.80         2.76         0.01         27          0
+nvme6n1         684.70         3.20         0.04         31          0
+nvme7n1         797.90         4.02         0.10         40          1
+nvme8n1         656.60         3.05         0.04         30          0
+nvme9n1         702.80         3.32         0.03         33          0
+nvme10n1        675.20         3.25         0.03         32          0
+nvme11n1        701.10         3.30         0.12         32          1
+nvme1n1         681.80         3.20         0.03         31          0
+
+-------------------------- SNIP -------------------------
+
+[0176] Write key rate per second:  15.50K. Total:  48.91M    Scan Rate:   2.12K
+[0177] Write key rate per second:  10.50K. Total:  49.02M    Scan Rate:   1.42K
+[0178] Write key rate per second:  11.00K. Total:  49.13M    Scan Rate:   1.55K
+[0179] Write key rate per second:  10.60K. Total:  49.24M    Scan Rate:   1.45K
+[0180] Write key rate per second:  10.70K. Total:  49.34M    Scan Rate:   1.50K
+[0181] Write key rate per second:  11.00K. Total:  49.45M    Scan Rate:   1.57K
+[0182] Write key rate per second:  10.70K. Total:  49.56M    Scan Rate:   1.53K
+[0183] Write key rate per second:  10.80K. Total:  49.67M    Scan Rate:   1.57K
+[0184] Write key rate per second:  11.30K. Total:  49.78M    Scan Rate:   1.69K
+[0185] Write key rate per second:  10.60K. Total:  49.89M    Scan Rate:   1.57K
+[0186] Write key rate per second:  11.20K. Total:  50.00M    Scan Rate:   1.72K
+[0187] Write key rate per second:  11.40K. Total:  50.12M    Scan Rate:   1.75K
+[0188] Write key rate per second:  12.10K. Total:  50.24M    Scan Rate:   1.97K
+
+avg-cpu:  %user   %nice %system %iowait  %steal   %idle
+          20.29    0.00    8.88   70.78    0.00    0.05
+
+Device:            tps    MB_read/s    MB_wrtn/s    MB_read    MB_wrtn
+nvme0n1           0.20         0.01         0.00          0          0
+nvme12n1        247.90         1.23         0.04         12          0
+nvme13n1        249.70         1.22         0.03         12          0
+nvme14n1        249.60         1.12         0.06         11          0
+nvme15n1        250.30         1.18         0.05         11          0
+nvme16n1        251.00         1.18         0.05         11          0
+nvme2n1         250.40         1.18         0.05         11          0
+nvme3n1         250.10         1.18         0.05         11          0
+nvme4n1         249.20         1.11         0.06         11          0
+nvme5n1         249.70         1.23         0.04         12          0
+nvme6n1         250.60         1.19         0.04         11          0
+nvme7n1         250.00         1.20         0.04         12          0
+nvme8n1         250.10         1.20         0.04         11          0
+nvme9n1         250.50         1.22         0.04         12          0
+nvme10n1        250.50         1.23         0.04         12          0
+nvme11n1        250.80         1.20         0.01         11          0
+nvme1n1         249.60         1.19         0.04         11          0
+
+(EC2 EBSIOBalance% exhausted) 10kps @ 4k iops baseline. Again, not tea bag.
+
+-------------------------- SNIP -------------------------
+
+[0201] Write key rate per second:  30.50K. Total:  53.91M    Scan Rate:   5.36K
+[0202] Write key rate per second:  29.70K. Total:  54.21M    Scan Rate:   5.26K
+[0203] Write key rate per second:  30.20K. Total:  54.52M    Scan Rate:   5.35K
+[0204] Write key rate per second:  28.00K. Total:  54.80M    Scan Rate:   4.95K
+[0205] Write key rate per second:  27.20K. Total:  55.07M    Scan Rate:   4.64K
+[0206] Write key rate per second:  27.90K. Total:  55.36M    Scan Rate:   4.89K
+[0207] Write key rate per second:  27.30K. Total:  55.63M    Scan Rate:   4.78K
+[0208] Write key rate per second:  26.20K. Total:  55.90M    Scan Rate:   4.76K
+[0209] Write key rate per second:  24.60K. Total:  56.14M    Scan Rate:   4.45K
+[0210] Write key rate per second:  24.90K. Total:  56.40M    Scan Rate:   4.50K
+[0211] Write key rate per second:  25.20K. Total:  56.65M    Scan Rate:   4.60K
+[0212] Write key rate per second:  25.30K. Total:  56.90M    Scan Rate:   4.59K
+[0213] Write key rate per second:  25.30K. Total:  57.16M    Scan Rate:   4.62K
+
+avg-cpu:  %user   %nice %system %iowait  %steal   %idle
+          61.54    0.00   19.10   17.77    0.00    1.58
+
+Device:            tps    MB_read/s    MB_wrtn/s    MB_read    MB_wrtn
+nvme0n1           1.80         0.03         0.00          0          0
+nvme12n1        262.10         1.31         0.04         13          0
+nvme13n1        289.00         1.49         0.02         14          0
+nvme14n1         32.20         0.00         0.65          0          6
+nvme15n1        269.10         1.40         0.04         13          0
+nvme16n1        285.00         1.49         0.04         14          0
+nvme2n1         295.90         1.54         0.03         15          0
+nvme3n1         273.10         1.43         0.03         14          0
+nvme4n1          35.90         0.00         0.72          0          7
+nvme5n1         271.30         1.43         0.03         14          0
+nvme6n1         287.70         1.52         0.03         15          0
+nvme7n1         272.40         1.43         0.03         14          0
+nvme8n1         281.10         1.49         0.03         14          0
+nvme9n1         290.90         1.55         0.03         15          0
+nvme10n1        287.30         1.50         0.03         15          0
+nvme11n1        286.00         1.52         0.03         15          0
+nvme1n1         279.40         1.48         0.03         14          0
+
+(Compaction) Highly variable throughput caused by compaction likely hidden from aggregate metrics due to concurrency
+
+Booooooooooooooooooooooooooooooooooooooooooooooooo
+
+-------------------------- SNIP -------------------------
+
+
+[0244] Write key rate per second:  15.40K. Total:  64.14M    Scan Rate:   2.85K
+[0245] Write key rate per second:  14.20K. Total:  64.29M    Scan Rate:   2.59K
+[0246] Write key rate per second:  14.90K. Total:  64.44M    Scan Rate:   2.56K
+[0247] Write key rate per second:  16.20K. Total:  64.60M    Scan Rate:   2.13K
+[0248] Write key rate per second:  16.50K. Total:  64.77M    Scan Rate:   2.17K
+[0249] Write key rate per second:  16.90K. Total:  64.94M    Scan Rate:   2.24K
+[0250] Write key rate per second:  17.20K. Total:  65.11M    Scan Rate:   2.26K
+[0251] Write key rate per second:  10.50K. Total:  65.22M    Scan Rate:   1.39K
+[0252] Write key rate per second:   9.60K. Total:  65.32M    Scan Rate:   1.22K
+[0253] Write key rate per second:  12.80K. Total:  65.45M    Scan Rate:   1.70K
+[0254] Write key rate per second:  23.70K. Total:  65.68M    Scan Rate:   3.17K
+[0255] Write key rate per second:  26.80K. Total:  65.95M    Scan Rate:   3.57K
+[0256] Write key rate per second:  29.40K. Total:  66.25M    Scan Rate:   3.96K
+
+avg-cpu:  %user   %nice %system %iowait  %steal   %idle
+          63.59    0.00   18.49   16.93    0.00    0.98
+
+Device:            tps    MB_read/s    MB_wrtn/s    MB_read    MB_wrtn
+nvme0n1           6.00         0.09         0.00          0          0
+nvme12n1        290.10         1.53         0.02         15          0
+nvme13n1        298.60         1.59         0.02         15          0
+nvme14n1         27.10         0.01         0.54          0          5
+nvme15n1        278.60         1.49         0.03         14          0
+nvme16n1        282.10         1.52         0.01         15          0
+nvme2n1         281.00         1.51         0.03         15          0
+nvme3n1         272.40         1.47         0.03         14          0
+nvme4n1          43.00         0.00         4.35          0         43
+nvme5n1         277.10         1.50         0.03         15          0
+nvme6n1         280.10         1.52         0.01         15          0
+nvme7n1         274.50         1.48         0.03         14          0
+nvme8n1         275.00         1.49         0.01         14          0
+nvme9n1         273.20         1.47         0.03         14          0
+nvme10n1        281.10         1.51         0.03         15          0
+nvme11n1        286.20         1.55         0.03         15          0
+nvme1n1         276.30         1.49         0.01         14          0
+
+15k to 9k to 30k for no reason?
+
+-------------------------- SNIP -------------------------
+
+[0303] Write key rate per second:   6.50K. Total:  75.26M    Scan Rate:   1.05K
+[0304] Write key rate per second:   6.30K. Total:  75.33M    Scan Rate: 933.00
+[0305] Write key rate per second:   5.10K. Total:  75.38M    Scan Rate: 728.00
+[0306] Write key rate per second:   5.40K. Total:  75.43M    Scan Rate: 689.00
+[0307] Write key rate per second:   6.00K. Total:  75.49M    Scan Rate: 812.00
+[0308] Write key rate per second:   6.00K. Total:  75.55M    Scan Rate: 831.00
+[0309] Write key rate per second:   6.20K. Total:  75.62M    Scan Rate: 796.00
+[0310] Write key rate per second:   5.90K. Total:  75.68M    Scan Rate: 795.00
+[0311] Write key rate per second:   6.20K. Total:  75.74M    Scan Rate: 838.00
+[0312] Write key rate per second:   5.80K. Total:  75.80M    Scan Rate: 735.00
+[0313] Write key rate per second:   6.20K. Total:  75.86M    Scan Rate: 830.00
+[0314] Write key rate per second:   5.70K. Total:  75.92M    Scan Rate: 763.00
+[0315] Write key rate per second:   6.10K. Total:  75.98M    Scan Rate: 776.00
+
+avg-cpu:  %user   %nice %system %iowait  %steal   %idle
+          12.51    0.00    7.50   79.77    0.00    0.22
+
+Device:            tps    MB_read/s    MB_wrtn/s    MB_read    MB_wrtn
+nvme0n1           0.00         0.00         0.00          0          0
+nvme12n1        249.10         1.36         0.00         13          0
+nvme13n1        246.60         1.36         0.00         13          0
+nvme14n1        250.30         1.50         0.00         14          0
+nvme15n1        250.40         1.35         0.01         13          0
+nvme16n1        250.00         1.33         0.02         13          0
+nvme2n1         250.60         1.37         0.02         13          0
+nvme3n1         249.60         1.32         0.03         13          0
+nvme4n1         251.60         1.59         0.00         15          0
+nvme5n1         250.30         1.31         0.03         13          0
+nvme6n1         251.10         1.33         0.01         13          0
+nvme7n1         249.30         1.30         0.03         13          0
+nvme8n1         249.80         1.30         0.01         12          0
+nvme9n1         250.40         1.36         0.02         13          0
+nvme10n1        250.50         1.32         0.01         13          0
+nvme11n1        250.20         1.31         0.01         13          0
+nvme1n1         250.40         1.30         0.02         13          0
+
+Dropped to 5k? The data rates hardly changed. If anything they became more consistent.
+Suddenly throughput is gone. I think we found the baseline.
+
+Stop the test, let the burst credits refill and we'll start again from the top w/ lmdb to see if it breaks as bad.
+
+4.4G @ 213M
+
+> time go run populate/main.go --kv lmdb --valsz 0 --keys_mil 100 --dir=$DATADIREBS -keysz 12 -read -n 16 -p -batchsize 100 -sp 16
+[0000] Write key rate per second: 294.89K. Total:   3.42M    Scan Rate: 148.00
+[0001] Write key rate per second: 226.54K. Total:   5.79M    Scan Rate: 264.00
+[0002] Write key rate per second: 213.85K. Total:   7.92M    Scan Rate: 338.00
+[0003] Write key rate per second: 191.21K. Total:   9.96M    Scan Rate: 419.00
+[0004] Write key rate per second: 174.97K. Total:  11.76M    Scan Rate: 475.00
+[0005] Write key rate per second: 164.87K. Total:  13.50M    Scan Rate: 517.00
+[0006] Write key rate per second: 175.24K. Total:  15.16M    Scan Rate: 612.00
+[0007] Write key rate per second: 166.42K. Total:  16.71M    Scan Rate: 607.00
+[0008] Write key rate per second: 153.01K. Total:  18.36M    Scan Rate: 683.00
+[0009] Write key rate per second: 142.24K. Total:  19.80M    Scan Rate: 673.00
+[0010] Write key rate per second: 154.64K. Total:  21.26M    Scan Rate: 739.00
+[0011] Write key rate per second: 147.21K. Total:  22.69M    Scan Rate: 758.00
+[0012] Write key rate per second: 152.29K. Total:  24.21M    Scan Rate: 866.00
+-------------------------- SNIP -------------------------
+[0064] Write key rate per second: 126.83K. Total:  83.35M    Scan Rate:   2.59K
+[0065] Write key rate per second:  97.04K. Total:  84.35M    Scan Rate:   1.48K
+[0066] Write key rate per second: 120.83K. Total:  85.64M    Scan Rate:   1.89K
+[0067] Write key rate per second: 137.59K. Total:  87.01M    Scan Rate:   2.30K
+[0068] Write key rate per second: 131.37K. Total:  88.39M    Scan Rate:   2.38K
+[0069] Write key rate per second: 127.91K. Total:  89.73M    Scan Rate:   2.37K
+[0070] Write key rate per second: 136.01K. Total:  91.09M    Scan Rate:   2.46K
+[0071] Write key rate per second: 131.94K. Total:  92.48M    Scan Rate:   2.69K
+[0072] Write key rate per second: 128.20K. Total:  93.82M    Scan Rate:   2.76K
+[0073] Write key rate per second: 140.44K. Total:  95.22M    Scan Rate:   2.68K
+[0074] Write key rate per second: 122.04K. Total:  96.52M    Scan Rate:   2.46K
+[0075] Write key rate per second: 140.99K. Total:  97.92M    Scan Rate:   2.83K
+[0076] Write key rate per second: 138.22K. Total:  99.30M    Scan Rate:   3.00K
+real    12m57.545s
+user    10m16.082s
+sys     9m21.396s
+
+avg-cpu:  %user   %nice %system %iowait  %steal   %idle
+          41.08    0.00   42.10   16.82    0.00    0.00
+
+Device:            tps    MB_read/s    MB_wrtn/s    MB_read    MB_wrtn
+nvme0n1           0.20         0.00         0.00          0          0
+nvme12n1        252.70         0.00        11.55          0        115
+nvme13n1        249.90         0.00        11.08          0        110
+nvme14n1        249.80         0.00        14.08          0        140
+nvme15n1        237.50         0.00        18.35          0        183
+nvme16n1        243.60         0.00        14.79          0        147
+nvme2n1         250.40         0.00        15.29          0        152
+nvme3n1         247.60         0.00        13.58          0        135
+nvme4n1         255.80         0.00        10.42          0        104
+nvme5n1         257.20         0.00         5.28          0         52
+nvme6n1         251.10         0.00        12.15          0        121
+nvme7n1         249.00         0.00        14.31          0        143
+nvme8n1         247.00         0.00        10.81          0        108
+nvme9n1         245.60         0.00        13.48          0        134
+nvme10n1        251.40         0.00         7.03          0         70
+nvme11n1        256.10         0.00         6.09          0         60
+nvme1n1         255.20         0.00         9.21          0         92
+
+3.3G
+
+Seems good, let's keep going.
+
+
+> time go run populate/main.go --kv lmdb --valsz 0 --keys_mil 8000 --dir=$DATADIREBS -keysz 12 -read -n 16 -p -sp 16 -batchsize 100 -keypfx 4 -sync-every 1000
+[0000] Write key rate per second: 327.63K. Total:   3.60M    Scan Rate: 152.00
+[0001] Write key rate per second: 240.80K. Total:   6.24M    Scan Rate: 289.00
+[0002] Write key rate per second: 224.79K. Total:   8.53M    Scan Rate: 387.00
+[0003] Write key rate per second: 214.94K. Total:  10.68M    Scan Rate: 488.00
+[0004] Write key rate per second: 203.60K. Total:  12.72M    Scan Rate: 567.00
+[0005] Write key rate per second: 185.74K. Total:  14.64M    Scan Rate: 594.00
+[0006] Write key rate per second: 195.23K. Total:  16.40M    Scan Rate: 710.00
+[0007] Write key rate per second: 181.88K. Total:  17.79M    Scan Rate: 727.00
+[0008] Write key rate per second: 155.49K. Total:  18.89M    Scan Rate: 722.00
+[0009] Write key rate per second: 151.35K. Total:  19.85M    Scan Rate: 696.00
+[0010] Write key rate per second: 128.00K. Total:  20.82M    Scan Rate: 620.00
+[0011] Write key rate per second: 146.02K. Total:  22.04M    Scan Rate: 741.00
+[0012] Write key rate per second: 125.75K. Total:  22.88M    Scan Rate: 660.00
+
+avg-cpu:  %user   %nice %system %iowait  %steal   %idle
+          41.76    0.00   30.11   28.13    0.00    0.00
+
+Device:            tps    MB_read/s    MB_wrtn/s    MB_read    MB_wrtn
+nvme0n1           0.00         0.00         0.00          0          0
+nvme12n1        257.40         0.00         1.37          0         13
+nvme13n1        256.10         0.00         2.23          0         22
+nvme14n1        237.60         0.00        20.68          0        206
+nvme15n1        251.60         0.00         8.24          0         82
+nvme16n1        237.40         0.00        18.08          0        180
+nvme2n1         250.80         0.00        12.98          0        129
+nvme3n1         259.90         0.00         1.43          0         14
+nvme4n1         260.00         0.00         1.54          0         15
+nvme5n1         234.60         0.00        18.61          0        186
+nvme6n1         241.70         0.00        17.74          0        177
+nvme7n1         248.00         0.00        12.10          0        121
+nvme8n1         245.40         0.00        10.31          0        103
+nvme9n1         242.20         0.00        14.20          0        142
+nvme10n1        258.90         0.00         1.63          0         16
+nvme11n1        259.80         0.00         1.87          0         18
+nvme1n1         258.80         0.00         2.10          0         20
+
+-------------------------- SNIP -------------------------
+[1876] Write key rate per second:   5.53K. Total: 416.99M    Scan Rate:   1.67K
+[1877] Write key rate per second:   8.07K. Total: 417.07M    Scan Rate:   2.92K
+[1878] Write key rate per second:   2.15K. Total: 417.10M    Scan Rate: 170.00
+[1879] Write key rate per second:   2.02K. Total: 417.12M    Scan Rate: 151.00
+[1880] Write key rate per second:   2.18K. Total: 417.14M    Scan Rate: 187.00
+[1881] Write key rate per second:   1.99K. Total: 417.16M    Scan Rate: 144.00
+[1882] Write key rate per second:   2.56K. Total: 417.19M    Scan Rate: 199.00
+[1883] Write key rate per second:   2.41K. Total: 417.21M    Scan Rate: 176.00
+[1884] Write key rate per second:   6.19K. Total: 417.27M    Scan Rate:   1.88K
+[1885] Write key rate per second:   7.65K. Total: 417.36M    Scan Rate:   2.74K
+[1886] Write key rate per second:   1.93K. Total: 417.38M    Scan Rate: 150.00
+[1887] Write key rate per second:   2.04K. Total: 417.40M    Scan Rate: 168.00
+[1888] Write key rate per second:   2.10K. Total: 417.42M    Scan Rate: 159.00
+real    5h16m10.231s
+user    59m44.700s
+sys     1h0m20.110s
+
+avg-cpu:  %user   %nice %system %iowait  %steal   %idle
+           2.48    0.00    6.99   90.53    0.00    0.00
+
+Device:            tps    MB_read/s    MB_wrtn/s    MB_read    MB_wrtn
+nvme0n1           0.10         0.00         0.00          0          0
+nvme12n1        255.70         0.33         0.69          3          6
+nvme13n1        255.10         0.27         0.83          2          8
+nvme14n1        256.00         0.28         0.84          2          8
+nvme15n1        252.90         0.28         0.74          2          7
+nvme16n1        253.10         0.33         0.70          3          7
+nvme2n1         255.40         0.28         0.77          2          7
+nvme3n1         231.80         0.45         0.48          4          4
+nvme4n1         256.30         0.27         0.83          2          8
+nvme5n1         254.70         0.28         0.81          2          8
+nvme6n1         231.30         0.57         0.34          5          3
+nvme7n1         247.10         0.38         0.63          3          6
+nvme8n1         245.70         0.42         0.58          4          5
+nvme9n1         250.90         0.25         3.39          2         33
+nvme10n1        244.30         0.39         0.58          3          5
+nvme11n1        253.50         0.33         0.74          3          7
+nvme1n1         256.20         0.34         0.71          3          7
+
+12.6G
+
+Changed filesystem from xfs to ext4
+This increased block size from 512 to 4096
+Keypfx 4 w/ 256 DBs = 4B pages. Didn't work out so well on a single node.
+
+> time go run populate/main.go --kv rocksdb --valsz 0 --keys_mil 400 --dir=$DATADIREBS -keysz 12 -read -n 16 -p -batchsize 1000 -keypfx 4 -sync
+[0000] Write key rate per second: 226.70K. Total:   2.43M    Scan Rate:   1.09K
+[0001] Write key rate per second: 204.50K. Total:   4.48M    Scan Rate:   2.52K
+[0002] Write key rate per second: 189.10K. Total:   6.37M    Scan Rate:   3.67K
+[0003] Write key rate per second: 182.20K. Total:   8.19M    Scan Rate:   4.71K
+[0004] Write key rate per second: 177.30K. Total:   9.96M    Scan Rate:   6.07K
+[0005] Write key rate per second: 174.30K. Total:  11.71M    Scan Rate:   6.67K
+[0006] Write key rate per second: 168.40K. Total:  13.39M    Scan Rate:   7.57K
+[0007] Write key rate per second: 166.00K. Total:  15.05M    Scan Rate:   8.34K
+[0008] Write key rate per second: 163.10K. Total:  16.68M    Scan Rate:   9.24K
+[0009] Write key rate per second: 152.60K. Total:  18.30M    Scan Rate:  10.51K
+[0010] Write key rate per second: 158.60K. Total:  19.88M    Scan Rate:  10.57K
+[0011] Write key rate per second: 156.10K. Total:  21.44M    Scan Rate:  11.36K
+[0012] Write key rate per second: 155.10K. Total:  22.99M    Scan Rate:  12.86K
+-------------------------- SNIP -------------------------
+[0210] Write key rate per second:  34.70K. Total: 117.99M    Scan Rate:  15.28K
+[0211] Write key rate per second:  38.20K. Total: 118.38M    Scan Rate:  16.00K
+[0212] Write key rate per second:  37.10K. Total: 118.75M    Scan Rate:  15.67K
+[0213] Write key rate per second:  35.60K. Total: 119.10M    Scan Rate:  14.98K
+[0214] Write key rate per second:  38.30K. Total: 119.49M    Scan Rate:  16.20K
+[0215] Write key rate per second:  44.70K. Total: 119.93M    Scan Rate:  18.98K
+[0216] Write key rate per second:  48.90K. Total: 120.42M    Scan Rate:  20.76K
+[0217] Write key rate per second:  58.30K. Total: 121.00M    Scan Rate:  25.19K
+[0218] Write key rate per second:  61.50K. Total: 121.62M    Scan Rate:  26.73K
+[0219] Write key rate per second:  62.20K. Total: 122.24M    Scan Rate:  26.75K
+[0220] Write key rate per second:  62.80K. Total: 122.87M    Scan Rate:  28.71K
+[0221] Write key rate per second:  63.30K. Total: 123.50M    Scan Rate:  27.46K
+[0222] Write key rate per second:  62.70K. Total: 124.13M    Scan Rate:  27.60K
+real    37m16.145s
+user    58m37.791s
+sys     12m31.515s
+
+1.2G
+
+Very good space usage and throughput. Should run this case overnight.
+Keypfx 4 w/ 16 DBs = 256M pages.
+
+
+> time go run populate/main.go --kv lmdb --valsz 0 --keys_mil 400 --dir=$DATADIREBS -keysz 12 -read -n 16 -p -batchsize 100 -keypfx 3 -sync-every 100 -sp 16
+[0000] Write key rate per second: 174.61K. Total:   1.75M    Scan Rate:   9.18K
+[0001] Write key rate per second: 153.29K. Total:   3.28M    Scan Rate:  23.05K
+[0002] Write key rate per second: 141.42K. Total:   4.77M    Scan Rate:  35.73K
+[0003] Write key rate per second: 142.48K. Total:   6.20M    Scan Rate:  46.62K
+[0004] Write key rate per second: 130.87K. Total:   7.58M    Scan Rate:  56.48K
+[0005] Write key rate per second: 127.36K. Total:   8.92M    Scan Rate:  66.09K
+[0006] Write key rate per second: 127.19K. Total:  10.19M    Scan Rate:  72.30K
+[0007] Write key rate per second: 120.98K. Total:  11.47M    Scan Rate:  82.04K
+[0008] Write key rate per second: 117.88K. Total:  12.64M    Scan Rate:  84.40K
+[0009] Write key rate per second: 101.66K. Total:  13.71M    Scan Rate:  84.08K
+[0010] Write key rate per second: 101.81K. Total:  14.78M    Scan Rate:  90.93K
+[0011] Write key rate per second:  99.29K. Total:  15.82M    Scan Rate:  95.16K
+[0012] Write key rate per second:  94.88K. Total:  16.82M    Scan Rate:  97.25K
+-------------------------- SNIP -------------------------
+[0085] Write key rate per second:  12.00K. Total:  45.08M    Scan Rate:  32.31K
+[0086] Write key rate per second:  14.00K. Total:  45.22M    Scan Rate:  37.56K
+[0087] Write key rate per second:   6.00K. Total:  45.28M    Scan Rate:  16.13K
+[0088] Write key rate per second:  12.00K. Total:  45.40M    Scan Rate:  32.43K
+[0089] Write key rate per second:  14.00K. Total:  45.54M    Scan Rate:  37.96K
+[0090] Write key rate per second:   6.00K. Total:  45.60M    Scan Rate:  16.26K
+[0091] Write key rate per second:  12.00K. Total:  45.72M    Scan Rate:  32.59K
+[0092] Write key rate per second:  14.00K. Total:  45.86M    Scan Rate:  38.22K
+[0093] Write key rate per second:   6.00K. Total:  45.92M    Scan Rate:  16.40K
+[0094] Write key rate per second:  12.00K. Total:  46.04M    Scan Rate:  32.85K
+[0095] Write key rate per second:  14.00K. Total:  46.18M    Scan Rate:  38.53K
+[0096] Write key rate per second:   5.00K. Total:  46.23M    Scan Rate:  13.72K
+[0097] Write key rate per second:  13.00K. Total:  46.36M    Scan Rate:  35.82K
+real    16m32.487s
+user    7m45.711s
+sys     6m44.412s
+
+avg-cpu:  %user   %nice %system %iowait  %steal   %idle
+           6.82    0.00    7.33   85.79    0.00    0.05
+
+Device:            tps    MB_read/s    MB_wrtn/s    MB_read    MB_wrtn
+nvme0n1           0.00         0.00         0.00          0          0
+nvme12n1        251.10         0.00         1.89          0         18
+nvme13n1        252.00         0.00         1.98          0         19
+nvme14n1        249.90         0.00         1.95          0         19
+nvme15n1        251.80         0.00         1.94          0         19
+nvme16n1        250.30         0.00         1.92          0         19
+nvme2n1         250.10         0.00         1.91          0         19
+nvme3n1         247.30         0.00         1.92          0         19
+nvme4n1         248.80         0.00         1.89          0         18
+nvme5n1         250.30         0.00         1.95          0         19
+nvme6n1         250.50         0.00         1.93          0         19
+nvme7n1         249.50         0.00         1.94          0         19
+nvme8n1         246.90         0.00         1.94          0         19
+nvme9n1         249.30         0.00         1.99          0         19
+nvme10n1        249.00         0.00         1.98          0         19
+nvme11n1        249.10         0.00         1.91          0         19
+nvme1n1         255.00         0.00         2.02          0         20
+
+961M (20 bytes per key)
+
+~ 10kps consistent - quite good.
+
+> time go run populate/main.go --kv lmdb --valsz 0 --keys_mil 400 --dir=$DATADIREBS -keysz 12 -read -n 16 -p -batchsize 1000 -keypfx 3 -sp 16 -sync-every 1000
+[0000] Write key rate per second: 246.30K. Total:   2.46M    Scan Rate:  18.10K
+[0001] Write key rate per second: 195.30K. Total:   4.42M    Scan Rate:  40.07K
+[0002] Write key rate per second: 188.30K. Total:   6.31M    Scan Rate:  57.47K
+[0003] Write key rate per second: 179.00K. Total:   8.10M    Scan Rate:  74.55K
+[0004] Write key rate per second: 168.00K. Total:   9.78M    Scan Rate:  86.36K
+[0005] Write key rate per second: 162.30K. Total:  11.41M    Scan Rate: 102.43K
+[0006] Write key rate per second: 145.10K. Total:  12.86M    Scan Rate: 100.44K
+[0007] Write key rate per second: 138.50K. Total:  14.24M    Scan Rate: 106.80K
+[0008] Write key rate per second: 131.30K. Total:  15.56M    Scan Rate: 110.80K
+[0009] Write key rate per second: 128.40K. Total:  16.84M    Scan Rate: 124.08K
+[0010] Write key rate per second: 124.90K. Total:  18.09M    Scan Rate: 129.93K
+[0011] Write key rate per second: 123.10K. Total:  19.33M    Scan Rate: 130.88K
+[0012] Write key rate per second: 139.70K. Total:  20.72M    Scan Rate: 158.92K
+[0013] Write key rate per second: 139.80K. Total:  22.12M    Scan Rate: 170.18K
+-------------------------- SNIP -------------------------
+[0282] Write key rate per second:   7.20K. Total: 181.78M    Scan Rate:  75.12K
+[0283] Write key rate per second:   7.50K. Total: 181.86M    Scan Rate:  77.67K
+[0284] Write key rate per second:   7.70K. Total: 181.93M    Scan Rate:  81.15K
+[0285] Write key rate per second:   7.50K. Total: 182.01M    Scan Rate:  79.06K
+[0286] Write key rate per second:   8.10K. Total: 182.09M    Scan Rate:  86.02K
+[0287] Write key rate per second:   8.40K. Total: 182.17M    Scan Rate:  87.69K
+[0288] Write key rate per second:   8.00K. Total: 182.25M    Scan Rate:  82.78K
+[0289] Write key rate per second:   8.20K. Total: 182.34M    Scan Rate:  85.19K
+[0290] Write key rate per second:   8.10K. Total: 182.42M    Scan Rate:  83.71K
+[0291] Write key rate per second:   8.10K. Total: 182.50M    Scan Rate:  84.49K
+[0292] Write key rate per second:   8.20K. Total: 182.58M    Scan Rate:  84.14K
+[0293] Write key rate per second:   7.80K. Total: 182.66M    Scan Rate:  80.57K
+[0294] Write key rate per second:   8.50K. Total: 182.74M    Scan Rate:  87.44K
+[0295] Write key rate per second:   8.60K. Total: 182.83M    Scan Rate:  88.09K
+-------------------------- SNIP -------------------------
+[0306] Write key rate per second:   9.50K. Total: 184.05M    Scan Rate:  96.30K
+[0307] Write key rate per second:  10.00K. Total: 184.15M    Scan Rate: 100.68K
+[0308] Write key rate per second:  11.40K. Total: 184.27M    Scan Rate: 112.78K
+[0309] Write key rate per second:  16.10K. Total: 184.43M    Scan Rate: 153.57K
+[0310] Write key rate per second:  50.10K. Total: 184.93M    Scan Rate: 462.39K
+[0311] Write key rate per second:  33.60K. Total: 185.27M    Scan Rate: 330.45K
+[0312] Write key rate per second:  22.00K. Total: 185.49M    Scan Rate: 219.26K
+[0313] Write key rate per second:  75.50K. Total: 186.24M    Scan Rate: 760.06K
+[0314] Write key rate per second:  20.30K. Total: 186.44M    Scan Rate: 216.79K
+[0315] Write key rate per second:  21.70K. Total: 186.66M    Scan Rate: 231.01K
+[0316] Write key rate per second:  77.20K. Total: 187.44M    Scan Rate: 847.61K
+[0317] Write key rate per second:  20.00K. Total: 187.64M    Scan Rate: 222.06K
+[0318] Write key rate per second:  11.40K. Total: 187.75M    Scan Rate: 125.90K
+[0319] Write key rate per second:   8.00K. Total: 187.83M    Scan Rate:  87.81K
+-------------------------- SNIP -------------------------
+[0347] Write key rate per second:   8.60K. Total: 190.20M    Scan Rate:  97.50K
+[0348] Write key rate per second:   8.30K. Total: 190.28M    Scan Rate:  92.93K
+[0349] Write key rate per second:   8.60K. Total: 190.37M    Scan Rate:  95.68K
+[0350] Write key rate per second:   8.20K. Total: 190.45M    Scan Rate:  91.90K
+[0351] Write key rate per second:   8.60K. Total: 190.53M    Scan Rate:  97.14K
+[0352] Write key rate per second:   8.40K. Total: 190.62M    Scan Rate:  94.66K
+[0353] Write key rate per second:   8.20K. Total: 190.70M    Scan Rate:  92.44K
+[0354] Write key rate per second:   8.30K. Total: 190.78M    Scan Rate:  93.53K
+[0355] Write key rate per second:   8.90K. Total: 190.87M    Scan Rate: 101.25K
+[0356] Write key rate per second:   8.10K. Total: 190.95M    Scan Rate:  91.88K
+[0357] Write key rate per second:   8.60K. Total: 191.04M    Scan Rate:  97.01K
+[0358] Write key rate per second:   8.60K. Total: 191.12M    Scan Rate:  96.38K
+[0359] Write key rate per second:   8.30K. Total: 191.21M    Scan Rate:  94.51K
+real    60m5.694s
+user    26m15.478s
+sys     14m35.108s
+
+Throughput Flappy.
+
+EC2 EBSByteBalance% and EBSIOBalance% trade positions as the throughput constraint due to syncing every 1M keys per partition (x16)
+
+Beter to sync more often to obtain consistent throughput
+
+> time go run populate/main.go --kv lmdb --valsz 0 --keys_mil 100 --dir=$DATADIREBS -keysz 12 -read -n 16 -p -batchsize 50 -keypfx 3 -sp 16 -sync-every 50
+[0000] Write key rate per second: 146.70K. Total:   1.47M    Scan Rate:   6.41K
+[0001] Write key rate per second: 124.69K. Total:   2.72M    Scan Rate:  15.64K
+[0002] Write key rate per second: 108.86K. Total:   3.81M    Scan Rate:  21.11K
+[0003] Write key rate per second:  25.13K. Total:   4.06M    Scan Rate:   5.86K
+[0004] Write key rate per second:  23.87K. Total:   4.30M    Scan Rate:   5.95K
+[0005] Write key rate per second:  22.23K. Total:   4.53M    Scan Rate:   5.87K
+[0006] Write key rate per second:  20.75K. Total:   4.74M    Scan Rate:   5.68K
+[0007] Write key rate per second:  20.99K. Total:   4.95M    Scan Rate:   6.07K
+[0008] Write key rate per second:  20.25K. Total:   5.15M    Scan Rate:   6.07K
+[0009] Write key rate per second:  18.81K. Total:   5.34M    Scan Rate:   5.89K
+[0010] Write key rate per second:  17.50K. Total:   5.51M    Scan Rate:   5.60K
+[0011] Write key rate per second:  17.48K. Total:   5.69M    Scan Rate:   5.86K
+[0012] Write key rate per second:  16.75K. Total:   5.86M    Scan Rate:   5.72K
+-------------------------- SNIP -------------------------
+[0071] Write key rate per second:   8.75K. Total:  11.90M    Scan Rate:   6.20K
+[0072] Write key rate per second:   8.00K. Total:  11.98M    Scan Rate:   5.65K
+[0073] Write key rate per second:   8.13K. Total:  12.06M    Scan Rate:   5.87K
+[0074] Write key rate per second:   8.00K. Total:  12.14M    Scan Rate:   5.79K
+[0075] Write key rate per second:   8.25K. Total:  12.22M    Scan Rate:   5.99K
+[0076] Write key rate per second:   8.49K. Total:  12.31M    Scan Rate:   6.25K
+[0077] Write key rate per second:   7.88K. Total:  12.39M    Scan Rate:   5.79K
+[0078] Write key rate per second:   7.93K. Total:  12.47M    Scan Rate:   5.88K
+[0079] Write key rate per second:   8.00K. Total:  12.55M    Scan Rate:   5.93K
+[0080] Write key rate per second:   8.00K. Total:  12.63M    Scan Rate:   6.01K
+[0081] Write key rate per second:   7.75K. Total:  12.71M    Scan Rate:   5.82K
+[0082] Write key rate per second:   7.74K. Total:  12.78M    Scan Rate:   5.89K
+[0083] Write key rate per second:   7.87K. Total:  12.86M    Scan Rate:   6.03K
+real    14m9.807s
+user    1m50.676s
+sys     1m41.784s
+
+avg-cpu:  %user   %nice %system %iowait  %steal   %idle
+           3.73    0.00    4.91   91.36    0.00    0.00
+
+Device:            tps    MB_read/s    MB_wrtn/s    MB_read    MB_wrtn
+nvme0n1           0.00         0.00         0.00          0          0
+nvme12n1        250.70         0.00         1.67          0         16
+nvme13n1        250.40         0.00         1.71          0         17
+nvme14n1        250.90         0.00         1.70          0         16
+nvme15n1        250.20         0.00         1.70          0         16
+nvme16n1        250.60         0.00         1.63          0         16
+nvme2n1         250.70         0.00         1.71          0         17
+nvme3n1         249.50         0.00         1.72          0         17
+nvme4n1         247.40         0.00         1.66          0         16
+nvme5n1         250.20         0.00         1.70          0         16
+nvme6n1         250.70         0.00         1.67          0         16
+nvme7n1         249.80         0.00         1.69          0         16
+nvme8n1         249.10         0.00         1.69          0         16
+nvme9n1         248.90         0.00         1.67          0         16
+nvme10n1        249.90         0.00         1.65          0         16
+nvme11n1        250.70         0.00         1.67          0         16
+nvme1n1         250.70         0.00         1.67          0         16
+
+340M
+
+Thoughput steady at 7-8k. 50x50 is probably a bit low.
+
+> time go run populate/main.go --kv lmdb --valsz 0 --keys_mil 100 --dir=$DATADIREBS -keysz 12 -read -n 16 -p -batchsize 50 -keypfx 3 -sp 16 -sync-every 200
+[0000] Write key rate per second: 142.33K. Total:   1.55M    Scan Rate:   7.24K
+[0001] Write key rate per second: 137.87K. Total:   2.93M    Scan Rate:  18.36K
+[0002] Write key rate per second: 132.79K. Total:   4.26M    Scan Rate:  28.30K
+[0003] Write key rate per second: 122.83K. Total:   5.55M    Scan Rate:  37.41K
+[0004] Write key rate per second: 125.50K. Total:   6.80M    Scan Rate:  45.97K
+[0005] Write key rate per second: 122.53K. Total:   8.03M    Scan Rate:  53.91K
+[0006] Write key rate per second: 112.98K. Total:   9.21M    Scan Rate:  60.46K
+[0007] Write key rate per second: 116.98K. Total:  10.38M    Scan Rate:  68.16K
+[0008] Write key rate per second: 108.30K. Total:  11.52M    Scan Rate:  74.20K
+[0009] Write key rate per second:  96.22K. Total:  12.54M    Scan Rate:  72.52K
+[0010] Write key rate per second:  89.47K. Total:  13.48M    Scan Rate:  72.75K
+[0011] Write key rate per second:  88.13K. Total:  14.41M    Scan Rate:  77.28K
+[0012] Write key rate per second:  88.44K. Total:  15.29M    Scan Rate:  78.10K
+-------------------------- SNIP -------------------------
+[0092] Write key rate per second:  14.66K. Total:  33.91M    Scan Rate:  32.27K
+[0093] Write key rate per second:  15.00K. Total:  34.06M    Scan Rate:  30.50K
+[0094] Write key rate per second:  15.00K. Total:  34.22M    Scan Rate:  32.66K
+[0095] Write key rate per second:  16.00K. Total:  34.38M    Scan Rate:  32.68K
+[0096] Write key rate per second:  14.00K. Total:  34.52M    Scan Rate:  28.74K
+[0097] Write key rate per second:  14.00K. Total:  34.68M    Scan Rate:  33.05K
+[0098] Write key rate per second:  12.00K. Total:  34.80M    Scan Rate:  24.79K
+[0099] Write key rate per second:  11.69K. Total:  34.94M    Scan Rate:  28.73K
+[0100] Write key rate per second:  12.78K. Total:  35.07M    Scan Rate:  28.24K
+[0101] Write key rate per second:  11.69K. Total:  35.20M    Scan Rate:  25.29K
+[0102] Write key rate per second:  14.00K. Total:  35.34M    Scan Rate:  29.46K
+[0103] Write key rate per second:  16.00K. Total:  35.50M    Scan Rate:  33.79K
+[0104] Write key rate per second:  15.00K. Total:  35.65M    Scan Rate:  31.77K
+
+avg-cpu:  %user   %nice %system %iowait  %steal   %idle
+           8.47    0.00    9.03   82.51    0.00    0.00
+
+Device:            tps    MB_read/s    MB_wrtn/s    MB_read    MB_wrtn
+nvme0n1           0.10         0.00         0.00          0          0
+nvme12n1        242.90         0.00         2.47          0         24
+nvme13n1        245.90         0.00         2.52          0         25
+nvme14n1        251.30         0.00         2.52          0         25
+nvme15n1        249.90         0.00         2.50          0         24
+nvme16n1        245.00         0.00         2.43          0         24
+nvme2n1         253.00         0.00         2.47          0         24
+nvme3n1         251.50         0.00         2.51          0         25
+nvme4n1         253.00         0.00         2.54          0         25
+nvme5n1         251.60         0.00         2.51          0         25
+nvme6n1         242.90         0.00         2.39          0         23
+nvme7n1         253.20         0.00         2.51          0         25
+nvme8n1         251.10         0.00         2.57          0         25
+nvme9n1         249.40         0.00         2.51          0         25
+nvme10n1        255.70         0.00         2.55          0         25
+nvme11n1        251.80         0.00         2.50          0         25
+nvme1n1         251.90         0.00         2.54          0         25
+
+Much better?
+
+-------------------------- SNIP -------------------------
+
+[0159] Write key rate per second:   9.00K. Total:  42.45M    Scan Rate:  22.75K
+[0160] Write key rate per second:  12.00K. Total:  42.57M    Scan Rate:  30.29K
+[0161] Write key rate per second:  11.00K. Total:  42.68M    Scan Rate:  27.97K
+[0162] Write key rate per second:  10.00K. Total:  42.79M    Scan Rate:  27.96K
+[0163] Write key rate per second:  11.67K. Total:  42.91M    Scan Rate:  30.60K
+[0164] Write key rate per second:  11.00K. Total:  43.02M    Scan Rate:  28.14K
+[0165] Write key rate per second:  10.06K. Total:  43.13M    Scan Rate:  28.39K
+[0166] Write key rate per second:   7.95K. Total:  43.24M    Scan Rate:  27.24K
+[0167] Write key rate per second:  13.00K. Total:  43.37M    Scan Rate:  33.54K
+[0168] Write key rate per second:  11.00K. Total:  43.48M    Scan Rate:  28.52K
+[0169] Write key rate per second:   7.79K. Total:  43.56M    Scan Rate:  21.05K
+[0170] Write key rate per second:  10.00K. Total:  43.69M    Scan Rate:  32.94K
+[0171] Write key rate per second:  11.00K. Total:  43.81M    Scan Rate:  31.33K
+[0172] Write key rate per second:  10.00K. Total:  43.91M    Scan Rate:  26.15K
+[0173] Write key rate per second:  11.00K. Total:  44.02M    Scan Rate:  28.85K
+[0174] Write key rate per second:  10.00K. Total:  44.13M    Scan Rate:  28.95K
+
+02/04/2020 11:58:13 PM
+avg-cpu:  %user   %nice %system %iowait  %steal   %idle
+           5.24    0.00    7.17   87.59    0.00    0.00
+
+Device:            tps    MB_read/s    MB_wrtn/s    MB_read    MB_wrtn
+nvme0n1           3.50         0.00         0.01          0          0
+nvme12n1        247.10         0.00         1.98          0         19
+nvme13n1        247.90         0.00         2.00          0         19
+nvme14n1        253.80         0.00         1.97          0         19
+nvme15n1        248.30         0.00         2.05          0         20
+nvme16n1        249.00         0.00         2.00          0         20
+nvme2n1         247.70         0.00         1.96          0         19
+nvme3n1         252.00         0.00         1.99          0         19
+nvme4n1         253.20         0.00         2.01          0         20
+nvme5n1         246.20         0.00         2.00          0         19
+nvme6n1         254.00         0.00         2.00          0         19
+nvme7n1         248.10         0.00         1.95          0         19
+nvme8n1         252.30         0.00         1.95          0         19
+nvme9n1         251.10         0.00         2.00          0         19
+nvme10n1        247.90         0.00         2.03          0         20
+nvme11n1        249.70         0.00         2.01          0         20
+nvme1n1         248.90         0.00         2.03          0         20
+
+real    29m27.941s
+user    7m30.464s
+sys     6m47.468s
+
+Write volume drops. 10k inserts between sync is probably too little. 100k is probably closer to correct.
+
+922M
+
+> time go run populate/main.go --kv lmdb --valsz 0 --keys_mil 100 --dir=$DATADIREBS -keysz 12 -read -n 16 -p -batchsize 50 -keypfx 3 -sp 16 -sync-every 1000
+[0000] Write key rate per second: 158.00K. Total:   1.58M    Scan Rate:   7.45K
+[0001] Write key rate per second: 142.01K. Total:   3.00M    Scan Rate:  19.33K
+[0002] Write key rate per second: 131.03K. Total:   4.38M    Scan Rate:  30.39K
+[0003] Write key rate per second: 124.33K. Total:   5.69M    Scan Rate:  39.13K
+[0004] Write key rate per second: 124.42K. Total:   7.00M    Scan Rate:  49.36K
+[0005] Write key rate per second: 128.08K. Total:   8.28M    Scan Rate:  58.23K
+[0006] Write key rate per second: 127.55K. Total:   9.56M    Scan Rate:  67.77K
+[0007] Write key rate per second: 125.83K. Total:  10.82M    Scan Rate:  75.94K
+[0008] Write key rate per second: 122.23K. Total:  12.05M    Scan Rate:  82.72K
+[0009] Write key rate per second:  99.78K. Total:  13.10M    Scan Rate:  78.57K
+[0010] Write key rate per second: 102.92K. Total:  14.13M    Scan Rate:  83.38K
+[0011] Write key rate per second:  96.88K. Total:  15.15M    Scan Rate:  88.79K
+[0012] Write key rate per second: 100.04K. Total:  16.15M    Scan Rate:  92.77K
+-------------------------- SNIP -------------------------
+[0182] Write key rate per second:  21.96K. Total:  96.41M    Scan Rate: 124.90K
+[0183] Write key rate per second:  23.26K. Total:  96.64M    Scan Rate: 132.18K
+[0184] Write key rate per second:  29.67K. Total:  96.95M    Scan Rate: 178.83K
+[0185] Write key rate per second:  31.73K. Total:  97.27M    Scan Rate: 181.47K
+[0186] Write key rate per second:  24.04K. Total:  97.52M    Scan Rate: 145.91K
+[0187] Write key rate per second:  25.00K. Total:  97.77M    Scan Rate: 144.26K
+[0188] Write key rate per second:  12.85K. Total:  97.90M    Scan Rate:  73.78K
+[0189] Write key rate per second:  37.61K. Total:  98.28M    Scan Rate: 216.41K
+[0190] Write key rate per second:  29.40K. Total:  98.57M    Scan Rate: 170.63K
+[0191] Write key rate per second:  16.27K. Total:  98.75M    Scan Rate: 104.41K
+[0192] Write key rate per second:  45.02K. Total:  99.20M    Scan Rate: 263.53K
+[0193] Write key rate per second:  45.01K. Total:  99.65M    Scan Rate: 265.12K
+[0194] Write key rate per second:  32.38K. Total:  99.97M    Scan Rate: 190.59K
+
+avg-cpu:  %user   %nice %system %iowait  %steal   %idle
+          12.99    0.00   15.07   71.93    0.00    0.00
+
+Device:            tps    MB_read/s    MB_wrtn/s    MB_read    MB_wrtn
+nvme0n1           0.00         0.00         0.00          0          0
+nvme12n1        251.10         0.00         3.06          0         30
+nvme13n1        247.70         0.00         5.30          0         53
+nvme14n1        251.20         0.00         2.90          0         29
+nvme15n1        251.00         0.00         2.19          0         21
+nvme16n1        251.90         0.00         1.50          0         15
+nvme2n1         251.70         0.00         2.05          0         20
+nvme3n1         248.00         0.00         4.40          0         44
+nvme4n1         249.80         0.00         2.30          0         22
+nvme5n1         250.70         0.00         2.70          0         27
+nvme6n1         249.90         0.00         2.70          0         26
+nvme7n1         250.60         0.00         3.72          0         37
+nvme8n1         249.40         0.00         3.24          0         32
+nvme9n1         247.50         0.00         2.72          0         27
+nvme10n1        249.70         0.00         2.18          0         21
+nvme11n1        250.40         0.00         4.93          0         49
+nvme1n1         249.80         0.00         2.11          0         21
+
+real    32m33.245s
+user    19m15.810s
+sys     16m11.555s
+
+1.7GB
+
+Very good. Data set still fits in memory so it hasn't yet self-limited on page reads.
+Continuing to 1B.
+
+> nohup time go run populate/main.go --kv lmdb --valsz 0 --keys_mil 900 --dir=$DATADIREBS -keysz 12 -read -n 16 -p -batchsize 50 -keypfx 3 -sp 16 -sync-every 1000 -a
+[0000] Write key rate per second:  50.69K. Total: 545.85K    Scan Rate: 326.13K
+[0001] Write key rate per second:  16.55K. Total: 723.65K    Scan Rate: 106.37K
+[0002] Write key rate per second:   6.80K. Total: 799.20K    Scan Rate:  44.76K
+[0003] Write key rate per second: 775.00.  Total: 806.95K    Scan Rate:   4.65K
+[0004] Write key rate per second:  34.37K. Total:   1.17M    Scan Rate: 207.04K
+[0005] Write key rate per second:  17.73K. Total:   1.36M    Scan Rate: 107.11K
+[0006] Write key rate per second:  18.98K. Total:   1.55M    Scan Rate: 114.82K
+[0007] Write key rate per second:  14.84K. Total:   1.71M    Scan Rate:  90.02K
+[0008] Write key rate per second:  12.85K. Total:   1.84M    Scan Rate:  77.89K
+[0009] Write key rate per second:  15.45K. Total:   2.00M    Scan Rate:  93.87K
+[0010] Write key rate per second:  24.00K. Total:   2.24M    Scan Rate: 145.96K
+[0011] Write key rate per second:  24.41K. Total:   2.49M    Scan Rate: 149.38K
+[0012] Write key rate per second:  17.06K. Total:   2.67M    Scan Rate: 104.28K
+-------------------------- SNIP -------------------------
+
+Aborted.
+
+Locked at 10k and we haven't even filled ram.
+Pegged on write throughput.
+
+This workload needs to be moved to the i3 instance class.
+
+

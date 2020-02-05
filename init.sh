@@ -37,6 +37,16 @@ sudo chmod 777 /usr/local/share/go
 cd ~/badger-bench
 go mod init github.com/dgraph-io/badger-bench
 
+echo '
+fs.file-max = 999999
+net.ipv4.tcp_rmem = 4096 4096 16777216
+net.ipv4.tcp_wmem = 4096 4096 16777216
+' | sudo tee -a /etc/sysctl.conf
+echo '1024 65535' | sudo tee /proc/sys/net/ipv4/ip_local_port_range
+echo '
+*               -       nofile         999999
+' | sudo tee -a /etc/security/limits.conf
+
 exit
 
 # Copy/paste this
@@ -47,6 +57,17 @@ chmod +x init.sh
 ./init.sh
 
 sudo mkfs -t ext4 /dev/sdf
-sudo mkdir /data
-sudo mount /dev/sdf /data
-sudo chown ec2-user:ec2-user /data
+sudo mkdir /data-ebs
+sudo mount /dev/sdf /data-ebs
+sudo chown ec2-user:ec2-user /data-ebs
+
+driveletters=( f g h i j k l m n o p q r s t u )
+for i in {0..15}
+do
+	h=$(printf "%x" $i)
+	d="${driveletters[$i]}"
+	sudo umount /data/$h
+	sudo mkfs -t ext4 /dev/xvd$d
+	sudo mount /dev/xvd$d /data/$h
+	sudo chown ec2-user:ec2-user /data/$h
+done
