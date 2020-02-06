@@ -2953,7 +2953,7 @@ xvdf            118.40         0.01        11.39          0        113
 
 
 
---- 256c 1B Keys @ 92bits w/ Key space 256M w/ LevelDB History (EBS + EBS) ---
+--- 256c 1B Keys @ 92bits (256M/256M) w/ LevelDB History (EBS + EBS) ---
 
 
 
@@ -3025,8 +3025,471 @@ sys     3m30.678s
 
 
 
---- 256c 1B Keys @ 88bits w/ Key space 16M w/ LevelDB History (NVME + EBS) ---
+--- 128c 1B Keys @ 90bits (32M/64M) w/ LevelDB History (NVME + EBS) --- i3.large
 
 
 
-> time go run populate/main.go --kv lmdb --valsz 0 --keys_mil 1000 --dir=$DATADIREBS-2 -keysz 12 -n 16 -p -batchsize 100 -keypfx 4 -keytrunc 8 -sp 16 -sync-every 10 -fill -ldbhist $DATADIREBS
+> time go run populate/main.go --kv lmdb --valsz 0 --keys_mil 1000 --dir=$DATADIR -keysz 12 -n 16 -p -batchsize 50 -keypfx 4 -keytrunc 6 -sp 8 -sync-every 1000 -fill -ldbhist $DATADIREBS
+[0000] Keys per second: 844.85K Total:   8.45M Scan:  0.00 Rate:  0.00
+[0001] Keys per second: 923.41K Total:  16.37M Scan:  0.00 Rate:  0.00
+[0002] Keys per second: 968.70K Total:  24.69M Scan:   1.89K Rate:  0.00
+[0003] Keys per second:   1.08M Total:  32.91M Scan: 108.90K Rate:  0.00
+[0004] Keys per second: 921.63K Total:  38.62M Scan: 485.37K Rate:  0.00
+[0005] Keys per second: 677.26K Total:  44.40M Scan: 641.10K Rate:  0.00
+[0006] Keys per second: 731.53K Total:  49.76M Scan: 689.51K Rate:  0.00
+[0007] Keys per second: 730.30K Total:  55.58M Scan: 644.97K Rate:  0.00
+[0008] Keys per second: 720.36K Total:  61.19M Scan: 807.08K Rate:  1.00
+[0009] Keys per second: 743.86K Total:  67.25M Scan:   1.01M Rate:  1.00
+[0010] Keys per second: 950.90K Total:  74.28M Scan:   1.67M Rate:  1.00
+[0011] Keys per second:   1.05M Total:  81.39M Scan:   2.14M Rate:  2.00
+[0012] Keys per second: 873.30K Total:  88.46M Scan:   1.89M Rate:  2.00
+-------------------------- SNIP -------------------------
+[0208] Keys per second: 304.49K Total: 966.69M Scan:  12.19M Rate: 40.00
+[0209] Keys per second: 285.37K Total: 969.54M Scan:  11.07M Rate: 38.00
+[0210] Keys per second: 291.19K Total: 972.65M Scan:  11.92M Rate: 40.00
+[0211] Keys per second: 327.52K Total: 976.03M Scan:  13.10M Rate: 40.00
+[0212] Keys per second: 306.77K Total: 979.17M Scan:  12.15M Rate: 39.00
+[0213] Keys per second: 329.07K Total: 982.66M Scan:  13.63M Rate: 41.00
+[0214] Keys per second: 302.39K Total: 985.94M Scan:  12.82M Rate: 42.00
+[0215] Keys per second: 300.63K Total: 988.93M Scan:  11.48M Rate: 38.00
+[0216] Keys per second: 269.13K Total: 991.63M Scan:  10.27M Rate: 38.00
+[0217] Keys per second: 271.49K Total: 994.65M Scan:  11.36M Rate: 41.00
+[0218] Keys per second: 281.39K Total: 997.42M Scan:  11.02M Rate: 39.00
+[0219] Keys per second: 244.83K Total: 999.97M Scan:  10.08M Rate: 41.00
+[0220] Keys per second: 247.50K Total: 1000.00M Scan:  10.19M Rate: 41.00
+real    36m45.726s
+user    42m28.368s
+sys     13m16.457s
+
+avg-cpu:  %user   %nice %system %iowait  %steal   %idle
+          29.82    0.00   16.23   53.61    0.34    0.00
+
+Device:            tps    MB_read/s    MB_wrtn/s    MB_read    MB_wrtn
+xvda              0.40         0.00         0.00          0          0
+nvme0n1        7867.50        17.81       190.70        178       1906
+xvdf            445.70         0.01        10.67          0        106
+
+After 1.6 Billion events:
+
+24G     /data
+19G     /data-ebs
+
+@ 1.4B: 17.0 Bytes NVME + 12 Bytes EBS / evt
+@ 1.6B: 15.5 Bytes NVME + 12 Bytes EBS / evt
+
+
+
+--- 256c 1B Keys @ 90bits (64M/64M) w/ LevelDB History (NVME + EBS) --- i3.large --- 47bd1413.png
+
+
+
+> time go run populate/main.go --kv lmdb --valsz 0 --keys_mil 1000 --dir=$DATADIR -keysz 12 -n 16 -p -batchsize 100 -keypfx 4 -keytrunc 6 -sp 16 -sync-every 1000 -fill -ldbhist $DATADIREBS
+[0000] Keys per second: 990.96K Total:  10.43M Scan:  0.00 Rate:  0.00
+[0001] Keys per second:   1.10M Total:  20.32M Scan:  0.00 Rate:  0.00
+[0002] Keys per second:   1.05M Total:  30.17M Scan:  0.00 Rate:  0.00
+[0003] Keys per second:   1.05M Total:  39.72M Scan:  0.00 Rate:  0.00
+[0004] Keys per second:   1.11M Total:  50.27M Scan:   8.82K Rate:  0.00
+[0005] Keys per second: 982.05K Total:  58.96M Scan:  85.35K Rate:  0.00
+[0006] Keys per second:   1.13M Total:  68.40M Scan: 330.03K Rate:  0.00
+[0007] Keys per second:   1.01M Total:  74.82M Scan: 605.11K Rate:  0.00
+[0008] Keys per second: 865.57K Total:  81.38M Scan: 774.46K Rate:  0.00
+[0009] Keys per second: 736.80K Total:  87.63M Scan: 724.20K Rate:  0.00
+[0010] Keys per second: 711.40K Total:  93.46M Scan: 709.83K Rate:  0.00
+[0011] Keys per second: 997.94K Total: 100.49M Scan: 997.94K Rate:  1.00
+[0012] Keys per second:   1.30M Total: 107.16M Scan:   1.30M Rate:  1.00
+[0013] Keys per second: 943.79K Total: 113.52M Scan: 946.98K Rate:  1.00
+[0014] Keys per second:   1.04M Total: 119.55M Scan: 986.21K Rate:  0.00
+[0015] Keys per second: 817.03K Total: 126.78M Scan: 820.19K Rate:  1.00
+[0016] Keys per second: 935.84K Total: 134.81M Scan:   1.29M Rate:  1.00
+-------------------------- SNIP -------------------------
+[0132] Keys per second: 778.84K Total: 871.97M Scan:   8.29M Rate: 10.00
+[0133] Keys per second: 957.91K Total: 879.66M Scan:   9.82M Rate: 10.00
+[0134] Keys per second: 813.21K Total: 886.88M Scan:   8.97M Rate: 11.00
+[0135] Keys per second: 823.99K Total: 893.48M Scan:   9.66M Rate: 11.00
+[0136] Keys per second: 739.19K Total: 900.71M Scan:   8.46M Rate: 11.00
+[0137] Keys per second: 732.35K Total: 908.04M Scan:   8.50M Rate: 11.00
+[0138] Keys per second: 789.36K Total: 914.50M Scan:   9.28M Rate: 11.00
+[0139] Keys per second:   1.08M Total: 922.03M Scan:  12.88M Rate: 11.00
+[0140] Keys per second: 923.14K Total: 928.96M Scan:  10.76M Rate: 11.00
+[0141] Keys per second: 954.07K Total: 936.32M Scan:  11.80M Rate: 12.00
+[0142] Keys per second: 787.38K Total: 943.41M Scan:   9.90M Rate: 12.00
+[0143] Keys per second: 790.38K Total: 950.64M Scan:  10.26M Rate: 12.00
+[0144] Keys per second: 866.33K Total: 957.38M Scan:  11.03M Rate: 12.00
+[0145] Keys per second: 679.60K Total: 964.35M Scan:   8.37M Rate: 12.00
+[0146] Keys per second: 791.33K Total: 971.64M Scan:  10.06M Rate: 12.00
+[0147] Keys per second: 861.75K Total: 979.56M Scan:  11.01M Rate: 12.00
+[0148] Keys per second: 742.35K Total: 987.06M Scan:  10.43M Rate: 14.00
+[0149] Keys per second: 707.62K Total: 994.20M Scan:   9.63M Rate: 13.00
+[0150] Keys per second: 717.32K Total: 1000.01M Scan:   9.95M Rate: 13.00
+real    25m12.076s
+user    34m44.311s
+sys     6m23.227s
+
+continuing...
+
+> time go run populate/main.go --kv lmdb --valsz 0 --keys_mil 1000 --dir=$DATADIR -keysz 12 -n 16 -p -batchsize 100 -keypfx 4 -keytrunc 6 -sp 16 -sync-every 1000 -fill -ldbhist $DATADIREBS -a
+[0000] Keys per second: 710.88K Total:   7.11M Scan:  10.66M Rate: 15.00
+[0001] Keys per second: 922.06K Total:  13.51M Scan:  13.83M Rate: 15.00
+[0002] Keys per second: 875.10K Total:  20.55M Scan:  11.25M Rate: 12.00
+[0003] Keys per second: 972.81K Total:  26.87M Scan:  13.95M Rate: 14.00
+[0004] Keys per second: 784.08K Total:  33.94M Scan:  11.50M Rate: 14.00
+[0005] Keys per second: 776.20K Total:  40.16M Scan:  11.54M Rate: 14.00
+[0006] Keys per second: 863.56K Total:  46.24M Scan:  12.36M Rate: 14.00
+[0007] Keys per second: 924.66K Total:  51.95M Scan:  14.40M Rate: 15.00
+[0008] Keys per second: 662.59K Total:  56.85M Scan:  10.56M Rate: 15.00
+[0009] Keys per second: 541.97K Total:  62.05M Scan:   8.65M Rate: 15.00
+[0010] Keys per second: 650.19K Total:  67.50M Scan:  10.61M Rate: 16.00
+[0011] Keys per second: 565.44K Total:  72.56M Scan:   9.74M Rate: 17.00
+[0012] Keys per second: 600.00K Total:  78.48M Scan:  10.12M Rate: 16.00
+[0013] Keys per second: 509.06K Total:  83.57M Scan:   8.52M Rate: 16.00
+[0014] Keys per second: 574.89K Total:  89.32M Scan:   9.76M Rate: 16.00
+[0015] Keys per second: 586.40K Total:  95.19M Scan:  10.01M Rate: 17.00
+[0016] Keys per second: 548.48K Total: 100.67M Scan:  10.29M Rate: 18.00
+[0017] Keys per second: 529.11K Total: 105.96M Scan:   9.99M Rate: 18.00
+-------------------------- SNIP -------------------------
+[0545] Keys per second: 180.49K Total: 971.01M Scan:   5.14M Rate: 28.00
+[0546] Keys per second: 170.13K Total: 972.48M Scan:   4.85M Rate: 28.00
+[0547] Keys per second: 145.71K Total: 973.94M Scan:   4.14M Rate: 28.00
+[0548] Keys per second: 173.57K Total: 975.46M Scan:   4.97M Rate: 28.00
+[0549] Keys per second: 172.72K Total: 976.95M Scan:   4.96M Rate: 28.00
+[0550] Keys per second: 140.63K Total: 978.35M Scan:   4.03M Rate: 28.00
+[0551] Keys per second: 175.39K Total: 979.94M Scan:   5.04M Rate: 28.00
+[0552] Keys per second: 150.12K Total: 981.44M Scan:   4.59M Rate: 30.00
+[0553] Keys per second: 114.42K Total: 982.59M Scan:   3.31M Rate: 28.00
+[0554] Keys per second: 161.66K Total: 984.21M Scan:   4.66M Rate: 28.00
+[0555] Keys per second: 171.40K Total: 985.80M Scan:   4.95M Rate: 28.00
+[0556] Keys per second: 153.12K Total: 987.36M Scan:   4.50M Rate: 29.00
+[0557] Keys per second: 136.25K Total: 988.67M Scan:   3.76M Rate: 27.00
+[0558] Keys per second: 174.00K Total: 990.27M Scan:   4.91M Rate: 28.00
+[0559] Keys per second: 141.87K Total: 991.68M Scan:   4.11M Rate: 29.00
+[0560] Keys per second: 163.76K Total: 993.32M Scan:   4.75M Rate: 29.00
+[0561] Keys per second: 221.13K Total: 995.53M Scan:   6.41M Rate: 29.00
+[0562] Keys per second: 224.34K Total: 997.87M Scan:   6.78M Rate: 30.00
+[0563] Keys per second: 299.27K Total: 1000.01M Scan:   8.68M Rate: 29.00
+real    94m5.980s
+user    49m5.888s
+sys     25m36.024s
+
+23G     /data
+23G     /data-ebs
+
+continuing w/ batch size 10 ...
+
+> time go run populate/main.go --kv lmdb --valsz 0 --keys_mil 100 --dir=$DATADIR -keysz 12 -n 16 -p -batchsize 10 -keypfx 4 -keytrunc 6 -sp 16 -sync-every 10000 -fill -ldbhist $DATADIREBS -a
+[0000] Keys per second: 215.18K Total:   2.15M Scan:   6.46M Rate: 30.00
+[0001] Keys per second: 358.70K Total:   4.18M Scan:  11.03M Rate: 30.00
+[0002] Keys per second: 333.45K Total:   6.27M Scan:  10.00M Rate: 30.00
+[0003] Keys per second: 316.88K Total:   8.62M Scan:   9.51M Rate: 30.00
+[0004] Keys per second: 350.99K Total:  10.54M Scan:   9.59M Rate: 27.00
+[0005] Keys per second: 295.96K Total:  12.73M Scan:   7.95M Rate: 26.00
+[0006] Keys per second: 296.88K Total:  14.55M Scan:   9.32M Rate: 31.00
+[0007] Keys per second: 288.44K Total:  16.50M Scan:   9.22M Rate: 31.00
+[0008] Keys per second: 307.19K Total:  18.55M Scan:   8.63M Rate: 28.00
+[0009] Keys per second: 338.81K Total:  20.32M Scan:   9.89M Rate: 29.00
+[0010] Keys per second: 257.68K Total:  22.43M Scan:   8.14M Rate: 31.00
+[0011] Keys per second: 256.16K Total:  24.26M Scan:   8.14M Rate: 31.00
+[0012] Keys per second: 257.84K Total:  26.23M Scan:   5.93M Rate: 23.00
+-------------------------- SNIP -------------------------
+[0061] Keys per second: 123.65K Total:  82.75M Scan:   3.88M Rate: 31.00
+[0062] Keys per second: 109.14K Total:  83.74M Scan:   3.64M Rate: 33.00
+[0063] Keys per second:  87.74K Total:  84.62M Scan:   2.73M Rate: 31.00
+[0064] Keys per second: 114.66K Total:  85.66M Scan:   3.55M Rate: 31.00
+[0065] Keys per second: 117.64K Total:  86.65M Scan:   3.65M Rate: 31.00
+[0066] Keys per second: 101.50K Total:  87.53M Scan:   3.03M Rate: 29.00
+[0067] Keys per second: 115.55K Total:  88.61M Scan:   3.74M Rate: 32.00
+[0068] Keys per second: 123.94K Total:  89.60M Scan:   3.95M Rate: 31.00
+[0069] Keys per second: 114.92K Total:  90.67M Scan:   3.46M Rate: 30.00
+[0070] Keys per second: 141.86K Total:  91.72M Scan:   4.22M Rate: 29.00
+[0071] Keys per second:  99.68K Total:  92.56M Scan:   2.96M Rate: 29.00
+[0072] Keys per second: 148.72K Total:  93.75M Scan:   4.72M Rate: 31.00
+[0073] Keys per second: 120.84K Total:  94.61M Scan:   3.75M Rate: 31.00
+[0074] Keys per second: 131.36K Total:  95.70M Scan:   4.07M Rate: 31.00
+[0075] Keys per second: 138.62K Total:  96.82M Scan:   3.29M Rate: 23.00
+[0076] Keys per second: 101.50K Total:  97.72M Scan:   2.93M Rate: 28.00
+[0077] Keys per second: 119.90K Total:  98.82M Scan:   3.85M Rate: 32.00
+[0078] Keys per second: 109.84K Total:  99.91M Scan:   3.28M Rate: 29.00
+[0079] Keys per second: 106.31K Total: 100.00M Scan:   3.30M Rate: 31.00
+real    13m20.820s
+user    8m50.727s
+sys     6m35.163s
+
+24G     /data
+25G     /data-ebs
+
+Quite good. DB size deceeds 12B/key.
+
+
+
+--- 256c 1B Keys @ 92bits (256M/256M) w/ LevelDB History (NVME + EBS) --- i3.large
+
+
+
+> time go run populate/main.go --kv lmdb --valsz 0 --keys_mil 1000 --dir=$DATADIR -keysz 12 -n 16 -p -batchsize 100 -keypfx 4 -keytrunc 4 -sp 16 -sync-every 1000 -fill -ldbhist $DATADIREBS
+[0000] Keys per second:   1.04M Total:  10.38M Scan:  0.00 Rate:  0.00
+[0001] Keys per second:   1.10M Total:  20.35M Scan:  0.00 Rate:  0.00
+[0002] Keys per second: 983.91K Total:  30.00M Scan:  0.00 Rate:  0.00
+[0003] Keys per second: 982.52K Total:  39.52M Scan:  0.00 Rate:  0.00
+[0004] Keys per second:   1.02M Total:  49.26M Scan:  0.00 Rate:  0.00
+[0005] Keys per second:   1.00M Total:  59.32M Scan:  0.00 Rate:  0.00
+[0006] Keys per second:   1.06M Total:  68.58M Scan:  0.00 Rate:  0.00
+[0007] Keys per second: 937.80K Total:  77.50M Scan:  0.00 Rate:  0.00
+[0008] Keys per second: 828.84K Total:  86.44M Scan:  0.00 Rate:  0.00
+[0009] Keys per second: 921.90K Total:  95.22M Scan:  0.00 Rate:  0.00
+[0010] Keys per second:   1.06M Total: 104.51M Scan:  0.00 Rate:  0.00
+[0011] Keys per second:   1.09M Total: 113.95M Scan:  0.00 Rate:  0.00
+[0012] Keys per second: 928.60K Total: 123.26M Scan:  0.00 Rate:  0.00
+-------------------------- SNIP -------------------------
+[0187] Keys per second: 573.53K Total: 955.11M Scan:   1.72M Rate:  3.00
+[0188] Keys per second: 457.77K Total: 958.60M Scan:   1.37M Rate:  3.00
+[0189] Keys per second: 586.78K Total: 962.95M Scan:   1.76M Rate:  3.00
+[0190] Keys per second: 453.50K Total: 966.83M Scan:   1.36M Rate:  3.00
+[0191] Keys per second: 392.26K Total: 970.75M Scan:   1.22M Rate:  3.00
+[0192] Keys per second: 466.14K Total: 974.68M Scan:   1.40M Rate:  3.00
+[0193] Keys per second: 427.70K Total: 978.73M Scan:   1.28M Rate:  3.00
+[0194] Keys per second: 408.23K Total: 982.81M Scan:   1.23M Rate:  3.00
+[0195] Keys per second: 383.23K Total: 986.64M Scan:   1.12M Rate:  2.00
+[0196] Keys per second: 367.48K Total: 990.56M Scan:   1.10M Rate:  3.00
+[0197] Keys per second: 377.25K Total: 994.63M Scan:   1.13M Rate:  2.00
+[0198] Keys per second: 351.59K Total: 998.37M Scan:   1.05M Rate:  3.00
+[0199] Keys per second: 387.86K Total: 1000.01M Scan:   1.16M Rate:  3.00
+real    33m19.168s
+user    35m11.021s
+sys     9m17.221s
+
+21G     /data
+11G     /data-ebs
+
+avg-cpu:  %user   %nice %system %iowait  %steal   %idle
+           9.71    0.00    9.06   48.53    1.22   31.49
+
+Device:            tps    MB_read/s    MB_wrtn/s    MB_read    MB_wrtn
+xvda              0.20         0.00         0.00          0          0
+nvme0n1       14343.90        52.40        31.26        523        312
+xvdf             28.00         0.00         1.39          0         13
+
+
+continuing...
+
+
+> time go run populate/main.go --kv lmdb --valsz 0 --keys_mil 1000 --dir=$DATADIR -keysz 12 -n 16 -p -batchsize 100  -keypfx 4 -keytrunc 4 -sp 16 -sync-every 1000 -fill -ldbhist $DATADIREBS -a
+[0000] Keys per second: 385.01K Total:   3.85M Scan:   1.54M Rate:  4.00
+[0001] Keys per second: 477.79K Total:   7.37M Scan:   1.91M Rate:  4.00
+[0002] Keys per second: 504.21K Total:  11.33M Scan:   1.99M Rate:  3.00
+[0003] Keys per second: 448.59K Total:  14.99M Scan:   1.71M Rate:  3.00
+[0004] Keys per second: 564.70K Total:  18.56M Scan:   2.19M Rate:  3.00
+[0005] Keys per second: 473.51K Total:  21.65M Scan:   1.86M Rate:  3.00
+[0006] Keys per second: 309.77K Total:  24.67M Scan:   1.27M Rate:  4.00
+[0007] Keys per second: 451.97K Total:  28.27M Scan:   1.73M Rate:  3.00
+[0008] Keys per second: 470.59K Total:  32.13M Scan:   1.77M Rate:  3.00
+[0009] Keys per second: 446.20K Total:  35.38M Scan:   1.78M Rate:  4.00
+[0010] Keys per second: 562.16K Total:  39.20M Scan:   2.25M Rate:  4.00
+[0011] Keys per second: 399.67K Total:  42.21M Scan:   1.73M Rate:  4.00
+[0012] Keys per second: 492.00K Total:  45.42M Scan:   1.97M Rate:  4.00
+-------------------------- SNIP -------------------------
+[0339] Keys per second: 383.40K Total: 968.38M Scan:   2.52M Rate:  6.00
+[0340] Keys per second: 391.35K Total: 970.95M Scan:   2.30M Rate:  5.00
+[0341] Keys per second: 329.90K Total: 973.20M Scan:   2.13M Rate:  6.00
+[0342] Keys per second: 381.93K Total: 975.89M Scan:   2.35M Rate:  6.00
+[0343] Keys per second: 294.46K Total: 978.36M Scan:   2.03M Rate:  6.00
+[0344] Keys per second: 280.94K Total: 980.84M Scan:   2.03M Rate:  7.00
+[0345] Keys per second: 331.82K Total: 983.57M Scan:   2.10M Rate:  6.00
+[0346] Keys per second: 348.02K Total: 986.18M Scan:   2.12M Rate:  6.00
+[0347] Keys per second: 313.42K Total: 988.78M Scan:   2.23M Rate:  7.00
+[0348] Keys per second: 272.32K Total: 991.17M Scan:   1.82M Rate:  6.00
+[0349] Keys per second: 242.45K Total: 993.60M Scan:   1.70M Rate:  6.00
+[0350] Keys per second: 270.83K Total: 996.31M Scan:   1.90M Rate:  7.00
+[0351] Keys per second: 256.32K Total: 998.87M Scan:   1.79M Rate:  7.00
+real    58m54.564s
+user    39m10.823s
+sys     17m52.240s
+
+22G     /data
+12G     /data-ebs
+
+Scan rate seems correct: 2B / 2 ^ 28 = 7.45
+
+
+
+--- 256c 1B Keys @ 92bits (256M/256M) w/ Key Size 20 w/ LevelDB History (NVME + EBS) --- i3.large
+
+
+
+> time go run populate/main.go --kv lmdb --valsz 0 --keys_mil 1000 --dir=$DATADIR -keysz 20 -n 16 -p -batchsize 100 -keypfx 4 -keytrunc 4 -sp 16 -sync-every 1000 -fill -ldbhist $DATADIREBS
+[0000] Keys per second:   1.01M Total:  10.11M Scan:  0.00 Rate:  0.00
+[0001] Keys per second:   1.03M Total:  19.79M Scan:  0.00 Rate:  0.00
+[0002] Keys per second:   1.15M Total:  29.22M Scan:  0.00 Rate:  0.00
+[0003] Keys per second:   1.10M Total:  38.95M Scan:  0.00 Rate:  0.00
+[0004] Keys per second: 910.75K Total:  46.33M Scan:  0.00 Rate:  0.00
+[0005] Keys per second: 873.70K Total:  55.09M Scan:  0.00 Rate:  0.00
+[0006] Keys per second: 911.22K Total:  63.80M Scan:  0.00 Rate:  0.00
+[0007] Keys per second:   1.13M Total:  72.91M Scan:  0.00 Rate:  0.00
+[0008] Keys per second:   1.09M Total:  83.01M Scan:  0.00 Rate:  0.00
+[0009] Keys per second: 964.25K Total:  91.09M Scan:  0.00 Rate:  0.00
+[0010] Keys per second: 985.99K Total: 100.66M Scan:  0.00 Rate:  0.00
+[0011] Keys per second:   1.03M Total: 108.95M Scan:  0.00 Rate:  0.00
+[0012] Keys per second: 901.79K Total: 117.97M Scan:  0.00 Rate:  0.00
+-------------------------- SNIP -------------------------
+[0220] Keys per second: 473.63K Total: 959.45M Scan:   1.44M Rate:  3.00
+[0221] Keys per second: 371.87K Total: 962.48M Scan:   1.15M Rate:  3.00
+[0222] Keys per second: 461.04K Total: 966.13M Scan:   1.42M Rate:  3.00
+[0223] Keys per second: 387.03K Total: 969.17M Scan:   1.37M Rate:  3.00
+[0224] Keys per second: 322.93K Total: 972.19M Scan:   1.09M Rate:  3.00
+[0225] Keys per second: 392.58K Total: 975.62M Scan:   1.11M Rate:  2.00
+[0226] Keys per second: 356.75K Total: 979.17M Scan:   1.19M Rate:  3.00
+[0227] Keys per second: 273.19K Total: 981.91M Scan: 884.28K Rate:  3.00
+[0228] Keys per second: 337.22K Total: 985.28M Scan: 948.09K Rate:  2.00
+[0229] Keys per second: 354.31K Total: 988.76M Scan:   1.04M Rate:  2.00
+[0230] Keys per second: 294.98K Total: 991.71M Scan: 868.62K Rate:  2.00
+[0231] Keys per second: 349.08K Total: 995.20M Scan: 971.97K Rate:  2.00
+[0232] Keys per second: 325.69K Total: 998.59M Scan: 989.19K Rate:  3.00
+real    39m2.514s
+user    35m49.905s
+sys     11m5.194s
+
+avg-cpu:  %user   %nice %system %iowait  %steal   %idle
+          22.67    0.00   12.69   35.95    1.03   27.66
+
+Device:            tps    MB_read/s    MB_wrtn/s    MB_read    MB_wrtn
+xvda              0.00         0.00         0.00          0          0
+nvme0n1       10492.50        39.69        22.06        396        220
+xvdf             85.40         0.01         8.41          0         84
+
+31G     /data
+19G     /data-ebs
+
+
+
+--- 32c (32/256) 1B Keys @ 90bits (8M/64M) w/ LevelDB History (EBS + EBS) --- a1.medium --- 81c77a2e.png
+
+
+
+> time go run populate/main.go --kv lmdb --valsz 0 --keys_mil 1000 --dir=$DATADIREBS -keysz 12 -n 4 -p -batchsize 50 -keypfx 4 -keytrunc 6 -sp 16 -sync-every 1000 -fill -ldbhist $DATADIREBS
+[0000] Keys per second: 413.02K Total:   4.13M Scan:  0.00 Rate:  0.00
+[0001] Keys per second: 431.68K Total:   7.75M Scan:  17.92K Rate:  0.00
+[0002] Keys per second: 330.35K Total:  10.69M Scan: 221.03K Rate:  0.00
+[0003] Keys per second: 310.63K Total:  13.22M Scan: 309.42K Rate:  0.00
+[0004] Keys per second: 338.91K Total:  16.06M Scan: 372.28K Rate:  1.00
+[0005] Keys per second: 384.05K Total:  19.49M Scan: 688.93K Rate:  1.00
+[0006] Keys per second: 406.70K Total:  22.80M Scan: 750.08K Rate:  1.00
+[0007] Keys per second: 372.50K Total:  25.96M Scan: 811.70K Rate:  2.00
+[0008] Keys per second: 365.15K Total:  29.61M Scan:   1.14M Rate:  3.00
+[0009] Keys per second: 368.21K Total:  32.62M Scan:   1.14M Rate:  3.00
+[0010] Keys per second: 296.65K Total:  35.26M Scan:   1.15M Rate:  3.00
+[0011] Keys per second: 208.68K Total:  37.31M Scan: 809.35K Rate:  3.00
+[0012] Keys per second: 242.10K Total:  39.77M Scan:   1.14M Rate:  4.00
+-------------------------- SNIP -------------------------
+[0766] Keys per second:  22.44K Total: 349.43M Scan: 774.52K Rate: 34.00
+[0767] Keys per second:  24.00K Total: 349.67M Scan: 829.18K Rate: 34.00
+[0768] Keys per second:  22.55K Total: 349.90M Scan: 787.88K Rate: 34.00
+[0769] Keys per second:  24.02K Total: 350.14M Scan: 829.61K Rate: 34.00
+[0770] Keys per second:  22.80K Total: 350.37M Scan: 792.12K Rate: 34.00
+[0771] Keys per second:  23.00K Total: 350.60M Scan: 794.38K Rate: 34.00
+[0772] Keys per second:  23.29K Total: 350.83M Scan: 810.36K Rate: 34.00
+[0773] Keys per second:  22.25K Total: 351.05M Scan: 767.17K Rate: 34.00
+[0774] Keys per second:  24.09K Total: 351.29M Scan: 842.89K Rate: 34.00
+[0775] Keys per second:  23.21K Total: 351.53M Scan: 801.48K Rate: 34.00
+[0776] Keys per second:  23.48K Total: 351.76M Scan: 814.41K Rate: 34.00
+[0777] Keys per second:  23.32K Total: 352.00M Scan: 804.98K Rate: 34.00
+[0778] Keys per second:  23.00K Total: 352.23M Scan: 800.28K Rate: 34.00
+real    130m2.591s
+user    21m28.291s
+sys     19m19.485s
+
+avg-cpu:  %user   %nice %system %iowait  %steal   %idle
+          15.57    0.00   14.86   69.57    0.00    0.00
+
+Device:            tps    MB_read/s    MB_wrtn/s    MB_read    MB_wrtn
+nvme0n1           0.00         0.00         0.00          0          0
+nvme2n1        2500.61         8.69        12.52         85        123
+nvme1n1          37.11         0.01         3.98          0         39
+
+6.6G    /data-ebs
+
+Not even burst throttled. Restarting at 92bits
+
+
+
+--- 32c (32/256) 1B Keys @ 92bits (32M/256M) w/ LevelDB History (EBS + EBS) --- a1.medium
+
+
+
+> time go run populate/main.go --kv lmdb --valsz 0 --keys_mil 1000 --dir=$DATADIREBS -keysz 12 -n 16 -p -batchsize 100 -keypfx 4 -keytrunc 4 -sp 2 -sync-every 1000 -fill -ldbhist $DATADIREBS
+[0000] Keys per second: 512.75K Total:   5.13M Scan:  0.00   Rate:  0.00
+[0001] Keys per second: 538.17K Total:   9.48M Scan:  0.00   Rate:  0.00
+[0002] Keys per second: 513.47K Total:  13.72M Scan:  0.00   Rate:  0.00
+[0003] Keys per second: 521.63K Total:  18.43M Scan:  0.00   Rate:  0.00
+[0004] Keys per second: 527.47K Total:  22.72M Scan:  0.00   Rate:  0.00
+[0005] Keys per second: 471.48K Total:  27.08M Scan:  0.00   Rate:  0.00
+[0006] Keys per second: 538.97K Total:  31.63M Scan:   1.57K Rate:  0.00
+[0007] Keys per second: 285.79K Total:  34.49M Scan:  92.26K Rate:  0.00
+[0008] Keys per second: 202.10K Total:  36.51M Scan: 195.62K Rate:  0.00
+[0009] Keys per second: 193.94K Total:  38.56M Scan: 196.38K Rate:  1.00
+[0010] Keys per second: 204.95K Total:  40.61M Scan: 197.63K Rate:  0.00
+[0011] Keys per second: 202.92K Total:  42.64M Scan: 194.79K Rate:  0.00
+[0012] Keys per second: 193.37K Total:  44.67M Scan: 196.07K Rate:  1.00
+-------------------------- SNIP -------------------------
+[0214] Keys per second:  53.47K Total: 218.12M Scan: 309.12K Rate:  5.00
+[0215] Keys per second:  51.56K Total: 218.64M Scan: 296.58K Rate:  5.00
+[0216] Keys per second:  52.41K Total: 219.16M Scan: 302.34K Rate:  5.00
+[0217] Keys per second:  53.62K Total: 219.70M Scan: 313.02K Rate:  5.00
+[0218] Keys per second:  50.51K Total: 220.20M Scan: 291.06K Rate:  5.00
+[0219] Keys per second:  53.12K Total: 220.73M Scan: 306.54K Rate:  5.00
+[0220] Keys per second:  52.48K Total: 221.26M Scan: 303.30K Rate:  5.00
+[0221] Keys per second:  51.44K Total: 221.77M Scan: 296.34K Rate:  5.00
+[0222] Keys per second:  52.07K Total: 222.29M Scan: 300.12K Rate:  5.00
+[0223] Keys per second:  53.96K Total: 222.83M Scan: 315.54K Rate:  5.00
+[0224] Keys per second:  51.08K Total: 223.35M Scan: 294.00K Rate:  5.00
+[0225] Keys per second:  54.04K Total: 223.89M Scan: 312.18K Rate:  5.00
+[0226] Keys per second:  52.24K Total: 224.41M Scan: 301.02K Rate:  5.00
+
+avg-cpu:  %user   %nice %system %iowait  %steal   %idle
+          16.67    0.00   13.77   69.57    0.00    0.00
+
+Device:            tps    MB_read/s    MB_wrtn/s    MB_read    MB_wrtn
+nvme0n1           0.00         0.00         0.00          0          0
+nvme2n1        2524.22         9.22        12.95         89        125
+nvme1n1           0.00         0.00         0.00          0          0
+
+9.3GB    /data-ebs
+
+Still IO bound
+
+
+
+--- 64c (64/256) 1B Keys @ 92bits (64M/256M) w/ LevelDB History (EBS + EBS) --- a1.medium
+
+
+
+> time go run populate/main.go --kv lmdb --valsz 0 --keys_mil 1000 --dir=$DATADIREBS -keysz 12 -n 16 -p -batchsize 100 -keypfx 4 -keytrunc 4 -sp 4 -sync-every 1000 -fill -ldbhist $DATADIREBS
+[0000] Keys per second: 532.65K Total:   5.33M Scan:  0.00   Rate:  0.00
+[0001] Keys per second: 597.29K Total:   9.55M Scan:  0.00   Rate:  0.00
+[0002] Keys per second: 590.58K Total:  14.24M Scan:  0.00   Rate:  0.00
+[0003] Keys per second: 553.69K Total:  18.86M Scan:  0.00   Rate:  0.00
+[0004] Keys per second: 530.05K Total:  23.14M Scan:  0.00   Rate:  0.00
+[0005] Keys per second: 556.41K Total:  27.35M Scan:  0.00   Rate:  0.00
+[0006] Keys per second: 500.63K Total:  31.76M Scan:  0.00   Rate:  0.00
+[0007] Keys per second: 487.20K Total:  36.54M Scan:  0.00   Rate:  0.00
+[0008] Keys per second: 602.18K Total:  41.49M Scan:  0.00   Rate:  0.00
+[0009] Keys per second: 698.38K Total:  45.07M Scan:  0.00   Rate:  0.00
+[0010] Keys per second: 646.88K Total:  49.44M Scan:  0.00   Rate:  0.00
+[0011] Keys per second: 626.76K Total:  53.71M Scan:  0.00   Rate:  0.00
+[0012] Keys per second: 620.08K Total:  58.41M Scan:  0.00   Rate:  0.00
+-------------------------- SNIP -------------------------
+[0962] Keys per second:  51.74K Total: 711.89M Scan: 504.08K Rate:  9.00
+[0963] Keys per second:  51.74K Total: 712.41M Scan: 503.94K Rate:  9.00
+[0964] Keys per second:  51.56K Total: 712.92M Scan: 501.68K Rate:  9.00
+[0965] Keys per second:  52.07K Total: 713.45M Scan: 505.96K Rate:  9.00
+[0966] Keys per second:  51.91K Total: 713.97M Scan: 504.99K Rate:  9.00
+[0967] Keys per second:  51.71K Total: 714.49M Scan: 503.24K Rate:  9.00
+[0968] Keys per second:  51.79K Total: 715.01M Scan: 503.69K Rate:  9.00
+[0969] Keys per second:  51.62K Total: 715.53M Scan: 502.80K Rate:  9.00
+[0970] Keys per second:  51.45K Total: 716.05M Scan: 500.70K Rate:  9.00
+[0971] Keys per second:  51.72K Total: 716.57M Scan: 504.30K Rate:  9.00
+[0972] Keys per second:  51.68K Total: 717.09M Scan: 503.10K Rate:  9.00
+[0973] Keys per second:  51.82K Total: 717.61M Scan: 504.90K Rate:  9.00
+[0974] Keys per second:  51.92K Total: 718.12M Scan: 506.00K Rate:  9.00
+real    162m38.864s
+user    33m16.033s
+sys     23m28.748s
+
+22GB @ 730M map + history

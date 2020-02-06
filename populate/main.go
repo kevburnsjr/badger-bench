@@ -504,7 +504,7 @@ func main() {
 		init = true
 		fmt.Println("Init lmdb")
 		start := time.Now()
-		o := lmdb.NoReadahead|lmdb.NoMemInit
+		o := lmdb.NoReadahead /*|lmdb.NoMemInit*/
 		if !*syncWrite {
 			o |= lmdb.NoSync|lmdb.NoMetaSync
 		}
@@ -539,7 +539,7 @@ func main() {
 		}
 		for i := 0; i < *n; i++ {
 			for j := 0; j < *subparts; j++ {
-				s := i * *n + j
+				s := i * *subparts + j
 				path := fmt.Sprintf(*dir+"/%x/lmdb/%x%x", i, i, j)
 				lmdbEnvs[s] = openlmdb(path, s)
 			}
@@ -561,7 +561,7 @@ func main() {
 		}
 		for i := 0; i < *n; i++ {
 			for j := 0; j < *subparts; j++ {
-				s := i * *n + j
+				s := i * *subparts + j
 				openlvldb(fmt.Sprintf(*ldbhist+"/%x/history/%x%x", i, i, j), s)
 			}
 		}

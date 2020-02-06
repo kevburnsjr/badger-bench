@@ -23,12 +23,21 @@ cd rocksdb-$ROCKSVERSION
 export USE_RTTI=1 && make shared_lib
 sudo make install-shared
 sudo ldconfig # to update ld.so.cache
-
 echo "export LD_LIBRARY_PATH=/home/ec2-user/rocksdb-$ROCKSVERSION/" >> ~/.bashrc
+
 source ~/.bashrc
 
-wget https://storage.googleapis.com/golang/go1.13.7.linux-amd64.tar.gz
-sudo tar -C /usr/local -xzf go1.13.7.linux-amd64.tar.gz
+arch=""
+case $(uname -m) in
+    i386)   arch="386" ;;
+    i686)   arch="386" ;;
+    x86_64) arch="amd64" ;;
+    arm)    dpkg --print-architecture | grep -q "arm64" && arch="arm64" || arch="arm" ;;
+esac
+
+cd ~
+wget https://storage.googleapis.com/golang/go1.13.7.linux-$arch.tar.gz
+sudo tar -C /usr/local -xzf go1.13.7.linux-$arch.tar.gz
 sudo ln -s /usr/local/go/bin/go /usr/bin/go
 sudo mkdir /usr/local/share/go
 sudo mkdir /usr/local/share/go/bin
@@ -66,9 +75,9 @@ sudo mkdir /data-ebs
 sudo mount /dev/xvdf /data-ebs
 sudo chown ec2-user:ec2-user /data-ebs
 
-sudo mkfs -t ext4 /dev/xvdg
+sudo mkfs -t ext4 /dev/nvme1n1
 sudo mkdir /data-ebs-2
-sudo mount /dev/xvdg /data-ebs-2
+sudo mount /dev/nvme1n1 /data-ebs-2
 sudo chown ec2-user:ec2-user /data-ebs-2
 
 driveletters=( f g h i j k l m n o p q r s t u )
@@ -81,3 +90,10 @@ do
 	sudo mount /dev/xvd$d /data/$h
 	sudo chown ec2-user:ec2-user /data/$h
 done
+
+# a1
+sudo mkfs -t ext4 /dev/nvme2n1
+sudo mkdir /data-ebs
+sudo mount /dev/nvme2n1 /data-ebs
+sudo chown ec2-user:ec2-user /data-ebs
+
