@@ -5,7 +5,9 @@ import (
 	"flag"
 	"fmt"
 	"bytes"
+	"crypto/sha1"
 	"log"
+	"math"
 	"math/rand"
 	"net/http"
 	_ "net/http/pprof"
@@ -37,21 +39,23 @@ var (
 	valueSize = flag.Int("valsz", 128, "Value size in bytes.")
 	keySize   = flag.Int("keysz", 16, "Key size in bytes.")
 	dir       = flag.String("dir", "", "Base dir for writes.")
+	history   = flag.Bool("history", false, "Store history.")
+	ldbhist   = flag.String("ldbhist", "", "LevelDB History Directory.")
 	mode      = flag.String("profile.mode", "", "enable profiling mode, one of [cpu, mem, mutex, block]")
 	withRead  = flag.Bool("read", false, "Read each key prior to write.")
-	keypfx    = flag.Int("keypfx", 4, "Bucket key size")
+	keypfx    = flag.Int("keypfx", 3, "Bucket key size")
 	keytrunc  = flag.Int("keytrunc", 0, "Truncate n bits from bucket key")
 	readOther = flag.Bool("read-other", false, "Read an unrelated key prior to each write.")
 	seqKeys   = flag.Bool("keys_seq", false, "Use sequential keys.")
-	history   = flag.Bool("history", false, "Store history.")
 	batchSize = flag.Int("batchsize", 1000, "Batch Size")
 	tsonly    = flag.Bool("tsonly", false, "Store timeseries only")
 	syncWrite = flag.Bool("sync", false, "Strong durability")
 	syncEvery = flag.Int("sync-every", 0, "Number of batches after which to force sync")
-	n         = flag.Int("n", 32, "Number of concurrent writers")
+	n         = flag.Int("n", 1, "Number of concurrent writers")
 	a         = flag.Bool("a", false, "Do not delete existing database (append)")
 	partition = flag.Bool("p", false, "Partition per writer")
 	subparts  = flag.Int("sp", 1, "Subpartitions per writer")
+	fill      = flag.Bool("fill", false, "Fill entire keyspace")
 )
 
 type entry struct {
@@ -68,7 +72,7 @@ func Reverse(s string) string {
     return string(runes)
 }
 
-func fillEntry(e *entry, workerNum int) {
+func fillEntry(e, prev *entry, workerNum, batchNum, entryNum int) {
 	// k := rand.Int() % int(*numKeys*mil)
 	// key := fmt.Sprintf("vsz=%05d-k=%010d", *valueSize, k) // 22 bytes.
 	// if cap(e.Key) < len(key) {
@@ -79,13 +83,28 @@ func fillEntry(e *entry, workerNum int) {
 	if *seqKeys {
 		binary.BigEndian.PutUint64(e.Key, uint64(time.Now().UnixNano()))
 	} else {
-		rand.Read(e.Key)
+		// rand.Read(e.Key)
+		if prev == nil {
+			rand.Read(e.Key)
+		} else {
+			a := sha1.Sum(prev.Key)
+			e.Key = a[:keylen]
+		}
+	}
+	// Fill is used to distribute keys sequentially over entire key space. You should see 0
+	// scans while using fill until you wrap around the keyspace at which point the number of
+	// scans should be exactly equal to the number of insertions.
+	if *fill {
+		if *keypfx == 3 {
+			binary.BigEndian.PutUint16(e.Key[1:*keypfx], uint16(batchNum * *batchSize + entryNum) << *keytrunc)
+		} else if *keypfx == 4 {
+			binary.BigEndian.PutUint32(e.Key[:*keypfx], uint32(batchNum * *batchSize + entryNum) << *keytrunc)
+		}
+	} else {
+		e.Key[*keypfx-1] = e.Key[*keypfx-1] << *keytrunc
 	}
 	if *n > 0 {
-		e.Key[0] = byte(workerNum+1)
-	}
-	for i := 0; i < *keytrunc; i++ {
-		e.Key[*keypfx-1] = e.Key[*keypfx-1] &^ byte(2^i)
+		e.Key[0] = byte(workerNum)
 	}
 	rand.Read(e.Value)
 	e.Meta = 0
@@ -99,21 +118,25 @@ var rdbhistory *store.Store
 var rdbhistories = map[int]*store.Store{}
 var boltdb *bolt.DB
 var ldb *leveldb.DB
+var ldbhistories = map[int]*leveldb.DB{}
 var lmdbEnv *lmdb.Env
 var lmdbDBI lmdb.DBI
 var lmdbDBIHistory lmdb.DBI
 var lmdbEnvs = map[int]*lmdb.Env{}
 var lmdbDBIs = map[int]lmdb.DBI{}
 var lmdbDBIHistories = map[int]lmdb.DBI{}
-var avgLen int64
 var scan = ratecounter.NewRateCounter(10 * time.Second)
+var keylen int
+var subkeylen int
+var initSize int64
 
 func writeBatch(entries []*entry, batchNum, workerNum int) int {
-	for _, e := range entries {
-		fillEntry(e, workerNum)
+	var prev *entry
+	for i, e := range entries {
+		fillEntry(e, prev, workerNum, batchNum, i)
+		prev = e
 	}
 	var err error
-	var keylen = len(entries[0].Key)
 	var keys = make([]byte, len(entries) * keylen)
 
 	var ts = make([]byte, 8)
@@ -259,65 +282,47 @@ func writeBatch(entries []*entry, batchNum, workerNum int) int {
 
 	// LMDB
 	if lmdbEnv != nil {
-		// start := time.Now()
-		var lmdbDBI = lmdbDBI
-		var lmdbDBIHistory = lmdbDBIHistory
+		var lmdbDBI = lmdbDBIs[workerNum]
+		var lmdbDBIHistory = lmdbDBIHistories[workerNum]
 		var scanned int64
+		for i, e := range entries {
+			copy(keys[i*keylen:i*keylen+keylen], e.Key)
+		}
+		if len(*ldbhist) > 0 {
+			if err := ldbhistories[workerNum].Put(ts, keys, nil); err != nil {
+				y.Check(err)
+			}
+		}
 		err := lmdbEnv.Update(func(txn *lmdb.Txn) error {
-			var k = make ([]byte, *keypfx)
-			var hist = map[int][]byte{}
+			cur, err := txn.OpenCursor(lmdbDBI)
+			if err != nil {
+				return err
+			}
+			defer cur.Close()
 			for _, e := range entries {
-				sub := rand.Intn(*subparts)
-				e.Key[0] = byte(workerNum * *n + sub)
-				k = e.Key[0:*keypfx]
-				lmdbDBI = lmdbDBIs[int(e.Key[0])]
-				lmdbDBIHistory = lmdbDBIHistories[int(e.Key[0])]
-				tail := e.Key[*keypfx:]
-				v, err := txn.Get(lmdbDBI, k)
-				if !lmdb.IsNotFound(err) {
-					y.Check(err)
-				}
-				var duplicate = false
-				for j := 0; j < len(v); j += subkeylen {
-					scanned++
-					if bytes.Equal(v[j:j+(subkeylen)], tail) {
-						duplicate = true
-						break
-					}
-				}
-				if duplicate {
-					println("duplicate")
-					continue
-				}
-				v = append(v, tail...)
 				if !*tsonly {
-					err := txn.Put(lmdbDBI, k, v, 0)
+					err = cur.Put(e.Key[:*keypfx], e.Key[*keypfx:], lmdb.NoDupData)
 					if err != nil {
 						return err
 					}
-				}
-				if _, ok := hist[sub]; !ok {
-					hist[sub] = e.Key
-				} else {
-					hist[sub] = append(hist[sub], e.Key...)
+					n, _ := cur.Count()
+					scanned += int64(n - 1)
 				}
 			}
-			for i, keys := range hist {
-				if *history || *tsonly {
-					if err := txn.Put(lmdbDBIHistories[i], ts, keys, 0); err != nil {
-						return err
-					}
-				}
-				if err := txn.Put(lmdbDBIs[i], []byte("checkpoint"), ts, 0); err != nil {
+			if *history || *tsonly {
+				if err := txn.Put(lmdbDBIHistory, ts, keys, 0); err != nil {
 					return err
 				}
 			}
+			if err := txn.Put(lmdbDBI, []byte("checkpoint"), ts, 0); err != nil {
+				return err
+			}
 			return nil
 		})
+		y.Check(err)
 		if *syncEvery > 0 && batchNum % *syncEvery == 0 {
 			lmdbEnv.Sync(true)
 		}
-		y.Check(err)
 		scan.Incr(scanned)
 	}
 
@@ -332,6 +337,16 @@ func humanize(n int64) string {
 		return fmt.Sprintf("%6.2fK", float64(n)/1000.0)
 	}
 	return fmt.Sprintf("%5.2f", float64(n))
+}
+
+func humanizeFloat(n float64) string {
+	if n >= 1000000 {
+		return fmt.Sprintf("%6.2fM", n/1000000.0)
+	}
+	if n >= 1000 {
+		return fmt.Sprintf("%6.2fK", n/1000.0)
+	}
+	return fmt.Sprintf("%5.2f", n)
 }
 
 type logger struct {}
@@ -363,6 +378,9 @@ func main() {
 		return true, true
 	}
 
+	keylen = *keySize
+	subkeylen = keylen - *keypfx
+
 	nw := *numKeys * mil
 	fmt.Printf("TOTAL KEYS TO WRITE: %s\n", humanize(int64(nw)))
 	fmt.Printf("WITH VALUE SIZE: %s\n", humanize(int64(*valueSize)))
@@ -386,6 +404,11 @@ func main() {
 	fmt.Printf("BATCH SIZE %d\n", *batchSize)
 	fmt.Printf("CONCURRENCY %d\n", *n)
 	fmt.Printf("KEY SIZE %d\n", *keySize)
+	fmt.Printf("KEY PREFIX %d\n", *keypfx)
+	fmt.Printf("KEY SPACE %s\n", humanize(int64(*n * *subparts * int(math.Pow(2, float64((8*(*keypfx-1)-*keytrunc)))))))
+	if *keytrunc > 0 {
+		fmt.Printf("KEY TRUNCATE %d\n", *keytrunc)
+	}
 	if *partition {
 		fmt.Printf("PARTITIONED\n")
 	}
@@ -481,9 +504,9 @@ func main() {
 		init = true
 		fmt.Println("Init lmdb")
 		start := time.Now()
-		o := lmdb.NoReadahead
+		o := lmdb.NoReadahead|lmdb.NoMemInit
 		if !*syncWrite {
-			o |= lmdb.NoSync
+			o |= lmdb.NoSync|lmdb.NoMetaSync
 		}
 		var openlmdb = func(path string, i int) (env *lmdb.Env) {
 			if !*a {
@@ -492,44 +515,57 @@ func main() {
 			os.MkdirAll(path, 0777)
 			env, err := lmdb.NewEnv()
 			y.Check(err)
-			err = env.SetMaxDBs(32)
+			err = env.SetMaxDBs(2)
 			y.Check(err)
-			err = env.SetMapSize(1 << 38) // ~273Gb
+			err = env.SetMapSize(int64(1 << (*keypfx*8-*keytrunc)*4096/(*n * *subparts)))
 			y.Check(err)
 			err = env.Open(path, uint(o), 0777)
 			y.Check(err)
 			// Acquire handle
 			err = env.Update(func(txn *lmdb.Txn) error {
 				var err error
-				for j := 0; j < *subparts; j++ {
-					s := i * *n + j
-					lmdbDBIs[s], err = txn.CreateDBI(fmt.Sprintf("bench-%d", s))
-					if err != nil {
-						y.Check(err)
-					}
-					lmdbDBIHistories[s], err = txn.CreateDBI(fmt.Sprintf("bench-%d-history", s))
-					if err != nil {
-						y.Check(err)
-					}
+				lmdbDBIs[i], err = txn.OpenDBI("bench", lmdb.DupSort|lmdb.DupFixed|lmdb.Create)
+				if err != nil {
+					y.Check(err)
+				}
+				lmdbDBIHistories[i], err = txn.CreateDBI("bench-history")
+				if err != nil {
+					y.Check(err)
 				}
 				return err
 			})
 			y.Check(err)
 			return
 		}
-		if *partition {
-			for i := 0; i < *n; i++ {
-				path := fmt.Sprintf(*dir+"/%x/lmdb", i)
-				lmdbEnvs[i] = openlmdb(path, i)
+		for i := 0; i < *n; i++ {
+			for j := 0; j < *subparts; j++ {
+				s := i * *n + j
+				path := fmt.Sprintf(*dir+"/%x/lmdb/%x%x", i, i, j)
+				lmdbEnvs[s] = openlmdb(path, s)
 			}
-		} else {
-			lmdbEnv = openlmdb(*dir + "/lmdb", 0)
-			lmdbDBI = lmdbDBIs[0]
-			lmdbDBIHistory = lmdbDBIHistories[0]
 		}
 		fmt.Printf("Initialized after %v\n", time.Now().Sub(start))
 	} else {
 		log.Fatalf("Invalid value for option kv: '%s'", *which)
+	}
+	if len(*ldbhist) > 0 {
+		init = true
+		fmt.Println("Init LevelDB")
+		var openlvldb = func(path string, i int) {
+			if !*a {
+				os.RemoveAll(path)
+			}
+			os.MkdirAll(path, 0777)
+			ldbhistories[i], err = leveldb.OpenFile(path+"/level.db", nil)
+			y.Check(err)
+		}
+		for i := 0; i < *n; i++ {
+			for j := 0; j < *subparts; j++ {
+				s := i * *n + j
+				openlvldb(fmt.Sprintf(*ldbhist+"/%x/history/%x%x", i, i, j), s)
+			}
+		}
+		y.Check(err)
 	}
 
 	if !init {
@@ -546,18 +582,22 @@ func main() {
 		for {
 			select {
 			case <-t.C:
-				fmt.Printf("[%04d] Write key rate per second: %s. Total: %s    Scan Rate: %s\n",
+				c := atomic.LoadInt64(&counter)
+				fmt.Printf("[%04d] Keys per second: %s Total: %s Scan: %s Rate: %s\n",
 					count,
 					humanize(rc.Rate()/10),
-					humanize(atomic.LoadInt64(&counter)),
-					humanize(scan.Rate()/10))
+					humanize(c),
+					humanize(scan.Rate()/10),
+					humanize(scan.Rate()/rc.Rate()))
 				count++
 			case <-ctx.Done():
-				fmt.Printf("[%04d] Write key rate per second: %s. Total: %s    Scan Rate: %s\n",
+				c := atomic.LoadInt64(&counter)
+				fmt.Printf("[%04d] Keys per second: %s Total: %s Scan: %s Rate: %s\n",
 					count,
 					humanize(rc.Rate()/10),
-					humanize(atomic.LoadInt64(&counter)),
-					humanize(scan.Rate()/10))
+					humanize(c),
+					humanize(scan.Rate()/10),
+					humanize(scan.Rate()/rc.Rate()))
 				return
 			}
 		}
@@ -568,7 +608,7 @@ func main() {
 		}
 	}()
 
-	N := *n
+	N := *n * *subparts
 	var wg sync.WaitGroup
 	for i := 0; i < N; i++ {
 		wg.Add(1)
@@ -587,7 +627,6 @@ func main() {
 			var written float64
 			var i int
 			for written < nw/float64(N) {
-				i++
 				wrote := float64(writeBatch(entries, i, proc))
 
 				wi := int64(wrote)
@@ -596,6 +635,7 @@ func main() {
 				rc.Incr(wi)
 
 				written += wrote
+				i++
 			}
 			wg.Done()
 		}(i)

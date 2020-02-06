@@ -28,7 +28,7 @@ echo "export LD_LIBRARY_PATH=/home/ec2-user/rocksdb-$ROCKSVERSION/" >> ~/.bashrc
 source ~/.bashrc
 
 wget https://storage.googleapis.com/golang/go1.13.7.linux-amd64.tar.gz
-sudo tar -C /usr/local -xzf go1.13.7.linux-arm64.tar.gz
+sudo tar -C /usr/local -xzf go1.13.7.linux-amd64.tar.gz
 sudo ln -s /usr/local/go/bin/go /usr/bin/go
 sudo mkdir /usr/local/share/go
 sudo mkdir /usr/local/share/go/bin
@@ -56,10 +56,20 @@ cd ~/badger-bench
 chmod +x init.sh
 ./init.sh
 
-sudo mkfs -t ext4 /dev/sdf
+sudo mkfs -t ext4 /dev/nvme0n1
+sudo mkdir /data
+sudo mount /dev/nvme0n1 /data
+sudo chown ec2-user:ec2-user /data
+
+sudo mkfs -t ext4 /dev/xvdf
 sudo mkdir /data-ebs
-sudo mount /dev/sdf /data-ebs
+sudo mount /dev/xvdf /data-ebs
 sudo chown ec2-user:ec2-user /data-ebs
+
+sudo mkfs -t ext4 /dev/xvdg
+sudo mkdir /data-ebs-2
+sudo mount /dev/xvdg /data-ebs-2
+sudo chown ec2-user:ec2-user /data-ebs-2
 
 driveletters=( f g h i j k l m n o p q r s t u )
 for i in {0..15}
