@@ -70,6 +70,11 @@ sudo mkdir /data
 sudo mount /dev/nvme0n1 /data
 sudo chown ec2-user:ec2-user /data
 
+
+sudo mkfs -t ext4 /dev/sdb
+sudo mkdir /data
+sudo mount /dev/sdb /data
+
 sudo mkfs -t ext4 /dev/xvdf
 sudo mkdir /data-ebs
 sudo mount /dev/xvdf /data-ebs

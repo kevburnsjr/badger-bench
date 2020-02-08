@@ -33,6 +33,8 @@ import (
 
 const mil float64 = 1000000
 
+const MDB_INTEGERDUP = 0x20
+
 var (
 	which     = flag.String("kv", "", "Which KV store to use. Options: badger, rocksdb, bolt, leveldb, lmdb")
 	numKeys   = flag.Float64("keys_mil", 10.0, "How many million keys to write.")
@@ -56,6 +58,9 @@ var (
 	partition = flag.Bool("p", false, "Partition per writer")
 	subparts  = flag.Int("sp", 1, "Subpartitions per writer")
 	fill      = flag.Bool("fill", false, "Fill entire keyspace")
+	intdup    = flag.Bool("intdup", false, "MDB_INTEGERDUP")
+	delmax    = flag.Int("delmax", 100000, "Maximum number of records to remove in a delete transaction")
+	exp       = flag.Duration("exp", 0, "Seconds after which an item expires")
 )
 
 type entry struct {
@@ -120,12 +125,16 @@ var boltdb *bolt.DB
 var ldb *leveldb.DB
 var ldbhistories = map[int]*leveldb.DB{}
 var lmdbEnv *lmdb.Env
+var lmdbEnvHistory *lmdb.Env
 var lmdbDBI lmdb.DBI
 var lmdbDBIHistory lmdb.DBI
 var lmdbEnvs = map[int]*lmdb.Env{}
+var lmdbEnvHistories = map[int]*lmdb.Env{}
 var lmdbDBIs = map[int]lmdb.DBI{}
 var lmdbDBIHistories = map[int]lmdb.DBI{}
-var scan = ratecounter.NewRateCounter(10 * time.Second)
+var interval = time.Duration(5)
+var scan = ratecounter.NewRateCounter(interval * time.Second)
+var deletions = ratecounter.NewRateCounter(interval * time.Second)
 var keylen int
 var subkeylen int
 var initSize int64
@@ -139,8 +148,11 @@ func writeBatch(entries []*entry, batchNum, workerNum int) int {
 	var err error
 	var keys = make([]byte, len(entries) * keylen)
 
+	var t = time.Now()
 	var ts = make([]byte, 8)
-	binary.BigEndian.PutUint64(ts, uint64(time.Now().UnixNano()))
+	binary.BigEndian.PutUint64(ts, uint64(t.Unix()))
+	var expts = make([]byte, 8)
+	binary.BigEndian.PutUint64(expts, uint64(t.Add(-1 * *exp).Unix()))
 
 	var lmdbEnv = lmdbEnv
 	if len(lmdbEnvs) > 0 {
@@ -285,15 +297,11 @@ func writeBatch(entries []*entry, batchNum, workerNum int) int {
 		var lmdbDBI = lmdbDBIs[workerNum]
 		var lmdbDBIHistory = lmdbDBIHistories[workerNum]
 		var scanned int64
+		var deleted int
 		for i, e := range entries {
 			copy(keys[i*keylen:i*keylen+keylen], e.Key)
 		}
-		if len(*ldbhist) > 0 {
-			if err := ldbhistories[workerNum].Put(ts, keys, nil); err != nil {
-				y.Check(err)
-			}
-		}
-		err := lmdbEnv.Update(func(txn *lmdb.Txn) error {
+		err = lmdbEnv.Update(func(txn *lmdb.Txn) error {
 			cur, err := txn.OpenCursor(lmdbDBI)
 			if err != nil {
 				return err
@@ -309,21 +317,53 @@ func writeBatch(entries []*entry, batchNum, workerNum int) int {
 					scanned += int64(n - 1)
 				}
 			}
-			if *history || *tsonly {
-				if err := txn.Put(lmdbDBIHistory, ts, keys, 0); err != nil {
-					return err
-				}
+			hcur, err := txn.OpenCursor(lmdbDBIHistory)
+			if err != nil {
+				return err
 			}
-			if err := txn.Put(lmdbDBI, []byte("checkpoint"), ts, 0); err != nil {
+			defer hcur.Close()
+			if err = hcur.PutMulti(ts, keys, keylen, 0); err != nil {
 				return err
 			}
 			return nil
 		})
 		y.Check(err)
+		if *exp > 0 && *history {
+			err = lmdbEnv.Update(func(txn *lmdb.Txn) error {
+				cur, err := txn.OpenCursor(lmdbDBIHistory)
+				if err != nil {
+					return err
+				}
+				defer cur.Close()
+				for {
+					k, keys, err := cur.Get(nil, nil, lmdb.Next)
+					if lmdb.IsNotFound(err) {
+						return nil
+					}
+					if err != nil {
+						return err
+					}
+					if bytes.Compare(k, expts) > 0 {
+						break
+					}
+					for i := 0; i < len(keys); i += keylen {
+						txn.Del(lmdbDBI, keys[i:i+*keypfx], keys[i+*keypfx:i+keylen-*keypfx])
+						deleted++
+					}
+					cur.Del(lmdb.NoDupData)
+					if float64(deleted) > float64(*batchSize) * 1.5 {
+						return nil
+					}
+				}
+				return nil
+			})
+		}
 		if *syncEvery > 0 && batchNum % *syncEvery == 0 {
 			lmdbEnv.Sync(true)
 		}
+		y.Check(err)
 		scan.Incr(scanned)
+		deletions.Incr(int64(deleted))
 	}
 
 	return len(entries)
@@ -504,35 +544,34 @@ func main() {
 		init = true
 		fmt.Println("Init lmdb")
 		start := time.Now()
-		o := lmdb.NoReadahead /*|lmdb.NoMemInit*/
+		o := lmdb.NoReadahead|lmdb.NoMemInit
 		if !*syncWrite {
 			o |= lmdb.NoSync|lmdb.NoMetaSync
 		}
-		var openlmdb = func(path string, i int) (env *lmdb.Env) {
+		var err error
+		var dbopt = lmdb.DupSort|lmdb.DupFixed|lmdb.Create
+		if *intdup {
+			dbopt |= MDB_INTEGERDUP
+		}
+		var openlmdb = func(path string, i int) (env *lmdb.Env, dbi lmdb.DBI, dbih lmdb.DBI) {
 			if !*a {
 				os.RemoveAll(path)
 			}
 			os.MkdirAll(path, 0777)
-			env, err := lmdb.NewEnv()
-			y.Check(err)
-			err = env.SetMaxDBs(2)
-			y.Check(err)
-			err = env.SetMapSize(int64(1 << (*keypfx*8-*keytrunc)*4096/(*n * *subparts)))
-			y.Check(err)
-			err = env.Open(path, uint(o), 0777)
-			y.Check(err)
-			// Acquire handle
+			env, err = lmdb.NewEnv()
+			env.SetMaxDBs(2)
+			env.SetMapSize(int64(1 << 37))
+			env.Open(path, uint(o), 0777)
 			err = env.Update(func(txn *lmdb.Txn) error {
-				var err error
-				lmdbDBIs[i], err = txn.OpenDBI("bench", lmdb.DupSort|lmdb.DupFixed|lmdb.Create)
+				dbi, err = txn.OpenDBI("bench", uint(dbopt))
 				if err != nil {
-					y.Check(err)
+					return err
 				}
-				lmdbDBIHistories[i], err = txn.CreateDBI("bench-history")
+				dbih, err = txn.OpenDBI("bench-history", uint(dbopt))
 				if err != nil {
-					y.Check(err)
+					return err
 				}
-				return err
+				return nil
 			})
 			y.Check(err)
 			return
@@ -541,7 +580,7 @@ func main() {
 			for j := 0; j < *subparts; j++ {
 				s := i * *subparts + j
 				path := fmt.Sprintf(*dir+"/%x/lmdb/%x%x", i, i, j)
-				lmdbEnvs[s] = openlmdb(path, s)
+				lmdbEnvs[s], lmdbDBIs[s], lmdbDBIHistories[s] = openlmdb(path, s)
 			}
 		}
 		fmt.Printf("Initialized after %v\n", time.Now().Sub(start))
@@ -571,33 +610,59 @@ func main() {
 	if !init {
 		log.Fatalf("Invalid arguments. Unable to init any store.")
 	}
-
-	rc := ratecounter.NewRateCounter(10 * time.Second)
+	rc := ratecounter.NewRateCounter(interval * time.Second)
 	var counter int64
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
 		var count int64
-		t := time.NewTicker(10 * time.Second)
+		t := time.NewTicker(interval * time.Second)
 		defer t.Stop()
+		report := func() {
+			c := atomic.LoadInt64(&counter)
+			kps := rc.Rate()
+			kpsd := kps
+			if kpsd < 1 {
+				kpsd = 1
+			}
+			var dataItems int64
+			var depth int64
+			var branchPages int64
+			var leafPages int64
+			var overflowPages int64
+			// for i, env := range lmdbEnvs {
+				// env.View(func(txn *lmdb.Txn) error {
+					// stat, _ := txn.Stat(lmdbDBIs[i])
+					// dataItems += int64(stat.Entries)
+					// depth += int64(stat.Depth)
+					// branchPages += int64(stat.BranchPages)
+					// leafPages += int64(stat.LeafPages)
+					// overflowPages += int64(stat.OverflowPages)
+					// return nil
+				// })
+			// }
+			fmt.Printf(`
+[%04d] %s Per Second %s Total %s Deleted Scan: %s Rate: %s
+               Data Items:  Depth:  Branch Pages:  Leaf Pages:  Overflow Pages:
+               %s      %s      %s         %s        %s`,
+				count,
+				humanize(kps/int64(interval)),
+				humanize(c),
+				humanize(deletions.Rate()/int64(interval)),
+				humanize(scan.Rate()/int64(interval)),
+				humanizeFloat(float64(scan.Rate())/float64(kpsd)),
+				humanize(dataItems),
+				humanizeFloat(float64(depth) / float64(len(lmdbEnvs))),
+				humanize(branchPages / int64(len(lmdbEnvs))),
+				humanize(leafPages / int64(len(lmdbEnvs))),
+				humanize(overflowPages / int64(len(lmdbEnvs))))
+			count++
+		}
 		for {
 			select {
 			case <-t.C:
-				c := atomic.LoadInt64(&counter)
-				fmt.Printf("[%04d] Keys per second: %s Total: %s Scan: %s Rate: %s\n",
-					count,
-					humanize(rc.Rate()/10),
-					humanize(c),
-					humanize(scan.Rate()/10),
-					humanize(scan.Rate()/rc.Rate()))
-				count++
+				report()
 			case <-ctx.Done():
-				c := atomic.LoadInt64(&counter)
-				fmt.Printf("[%04d] Keys per second: %s Total: %s Scan: %s Rate: %s\n",
-					count,
-					humanize(rc.Rate()/10),
-					humanize(c),
-					humanize(scan.Rate()/10),
-					humanize(scan.Rate()/rc.Rate()))
+				report()
 				return
 			}
 		}
