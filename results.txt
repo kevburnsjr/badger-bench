@@ -3765,7 +3765,7 @@ sys     0m0.405s
 !!!!!!   HISTORY DOES NOT SUPPORT KEY SIZE CHANGE   !!!!!!!
 
 History tables should be named by key size
-History table names will probably also specify expiration time (7/14/30)
+History table names should also specify expiration period if multiple are supported (7d/14d/30d)
 
 
 > time go run populate/main.go --kv lmdb --valsz 0 --keys_mil 1000 --dir=$DATADIR -keysz 12 -n 16 -p -sp 16 -batchsize 100 -keypfx 4 -keytrunc 4 -sync-every 100 -fill -history -exp 60m
@@ -3809,4 +3809,313 @@ dm-1              0.90         0.00         0.00          0          0
 We're operating at about 5x TPS (IOPS) compared with target production environment.
 Should put us around 25k sustained w/ deletes @ 1B keys
 
-> time go run populate/main.go --kv lmdb --valsz 0 --keys_mil 1000 --dir=$DATADIR -keysz 12 -n 16 -p -sp 16 -batchsize 100 -keypfx 4 -keytrunc 4 -sync-every 100 -fill -history -exp 10s -a
+
+
+--- 256c (256/256) 100M Keys @ 92bits (256M/256M) w/ Key Size 12 w/ 10s Rotating Delete (NVME + NVME) --- local vm
+
+
+
+> time go run populate/main.go --kv lmdb --valsz 0 --keys_mil 100 --dir=$DATADIR -keysz 12 -n 16 -p -sp 16 -batchsize 100 -keypfx 4 -keytrunc 4 -sync-every 100 -fill -history -exp 10s
+[0000]   1.23M Per Second   6.12M Total  0.00 Deleted Scan:  0.00 Rate:  0.00
+               Data Items:  Depth:  Branch Pages:  Leaf Pages:  Overflow Pages:
+                 6.13M       2.04       1.00         130.00         0.00
+[0001]   1.35M Per Second  12.22M Total  22.72K Deleted Scan:  0.00 Rate:  0.00
+               Data Items:  Depth:  Branch Pages:  Leaf Pages:  Overflow Pages:
+                12.11M       2.34       1.00         257.00         0.00
+[0002]   1.00M Per Second  15.56M Total   1.16M Deleted Scan:  0.00 Rate:  0.00
+               Data Items:  Depth:  Branch Pages:  Leaf Pages:  Overflow Pages:
+                 9.77M       2.46       1.00         208.00         0.00
+
+-------------------------- SNIP -------------------------
+
+[0032] 723.54K Per Second  92.24M Total 711.86K Deleted Scan:  0.00 Rate:  0.00
+               Data Items:  Depth:  Branch Pages:  Leaf Pages:  Overflow Pages:
+                 6.91M       2.68       2.00         148.00         0.00
+[0033] 789.76K Per Second  95.15M Total 576.26K Deleted Scan:  0.00 Rate:  0.00
+               Data Items:  Depth:  Branch Pages:  Leaf Pages:  Overflow Pages:
+                 7.60M       2.70       2.00         162.00         0.00
+[0034] 691.66K Per Second  98.08M Total 378.36K Deleted Scan:  0.00 Rate:  0.00
+               Data Items:  Depth:  Branch Pages:  Leaf Pages:  Overflow Pages:
+                 8.87M       2.78       2.00         189.00         0.00
+real    2m58.830s
+user    3m28.720s
+sys     0m59.631s
+
+avg-cpu:  %user   %nice %system %iowait  %steal   %idle
+          55.02    0.00   23.37   20.71    0.00    0.90
+
+Device:            tps    MB_read/s    MB_wrtn/s    MB_read    MB_wrtn
+sdb            7591.31         0.00       118.14          0       1182
+sda               0.20         0.00         0.00          0          0
+dm-0              0.10         0.00         0.00          0          0
+dm-1              0.00         0.00         0.00          0          0
+
+737M    /data
+
+VERY good results.
+DB size is stable.
+Throughput is high.
+
+Next test: 30s TTL w/ 100M items
+Next test: 60s TTL w/ 1B items
+Next test: 300s TTL w/ 1B items
+
+
+
+--- 256c (256/256) 100M Keys @ 92bits (256M/256M) w/ Key Size 12 w/ 30s Rotating Delete (NVME + NVME) --- local vm
+
+
+
+> time go run populate/main.go --kv lmdb --valsz 0 --keys_mil 100 --dir=$DATADIR -keysz 12 -n 16 -p -sp 16 -batchsize 100 -keypfx 4 -keytrunc 4 -sync-every 100 -fill -history -exp 30s
+[0000]   1.19M Per Second   6.33M Total  0.00 Deleted Scan:  0.00 Rate:  0.00
+[0001]   1.29M Per Second  12.61M Total  0.00 Deleted Scan:  0.00 Rate:  0.00
+[0002]   1.20M Per Second  18.63M Total  0.00 Deleted Scan:  0.00 Rate:  0.00
+[0003]   1.35M Per Second  24.61M Total  0.00 Deleted Scan:  0.00 Rate:  0.00
+[0004]   1.29M Per Second  30.50M Total  0.00 Deleted Scan:  0.00 Rate:  0.00
+[0005]   1.07M Per Second  35.34M Total  18.98K Deleted Scan:  0.00 Rate:  0.00
+[0006]  98.58K Per Second  35.58M Total 153.90K Deleted Scan:  0.00 Rate:  0.00
+[0007]   6.56K Per Second  35.61M Total 181.84K Deleted Scan:  0.00 Rate:  0.00
+[0008]   5.36K Per Second  35.64M Total 301.28K Deleted Scan:  0.00 Rate:  0.00
+[0009]   6.34K Per Second  35.67M Total 122.00K Deleted Scan:  0.00 Rate:  0.00
+[0010]   5.26K Per Second  35.69M Total 341.94K Deleted Scan:  0.00 Rate:  0.00
+-------------------------- SNIP -------------------------
+[0020] 402.46K Per Second  38.71M Total 437.54K Deleted Scan:  0.00 Rate:  0.00
+[0021] 412.02K Per Second  39.48M Total 360.06K Deleted Scan:  0.00 Rate:  0.00
+[0022] 120.38K Per Second  40.08M Total 337.10K Deleted Scan:  0.00 Rate:  0.00
+[0023] 292.82K Per Second  41.54M Total 412.14K Deleted Scan:  0.00 Rate:  0.00
+[0024] 578.00K Per Second  42.97M Total 428.02K Deleted Scan:  0.00 Rate:  0.00
+[0025] 595.68K Per Second  44.34M Total 336.38K Deleted Scan:  0.00 Rate:  0.00
+-------------------------- SNIP -------------------------
+[0031]  70.62K Per Second  47.89M Total 273.68K Deleted Scan:  0.00 Rate:  0.00
+[0032]  85.62K Per Second  48.32M Total 295.98K Deleted Scan:  0.00 Rate:  0.00
+[0033]  54.90K Per Second  48.61M Total 232.36K Deleted Scan:  0.00 Rate:  0.00
+[0034]  35.74K Per Second  48.79M Total 335.46K Deleted Scan:  0.00 Rate:  0.00
+[0035] 156.94K Per Second  49.57M Total 205.94K Deleted Scan:  0.00 Rate:  0.00
+[0036] 223.72K Per Second  50.70M Total  70.50K Deleted Scan:  0.00 Rate:  0.00
+[0037] 211.38K Per Second  51.78M Total  61.60K Deleted Scan:  0.00 Rate:  0.00
+[0038] 178.68K Per Second  52.69M Total  94.04K Deleted Scan:  0.00 Rate:  0.00
+[0039] 191.08K Per Second  53.67M Total  49.98K Deleted Scan:  0.00 Rate:  0.00
+[0040] 213.50K Per Second  54.77M Total  36.82K Deleted Scan:  0.00 Rate:  0.00
+[0041] 118.86K Per Second  55.39M Total 156.76K Deleted Scan:  0.00 Rate:  0.00
+[0042]  88.48K Per Second  55.85M Total 215.30K Deleted Scan:  0.00 Rate:  0.00
+[0043]  88.34K Per Second  56.30M Total 177.76K Deleted Scan:  0.00 Rate:  0.00
+[0044]  72.28K Per Second  56.67M Total 202.76K Deleted Scan:  0.00 Rate:  0.00
+[0045]  74.42K Per Second  57.06M Total 176.10K Deleted Scan:  0.00 Rate:  0.00
+[0046]  77.48K Per Second  57.45M Total 215.30K Deleted Scan:  0.00 Rate:  0.00
+-------------------------- SNIP -------------------------
+[0095] 277.84K Per Second  91.36M Total 191.02K Deleted Scan:  0.00 Rate:  0.00
+[0096] 279.24K Per Second  92.78M Total 190.46K Deleted Scan:  0.00 Rate:  0.00
+[0097] 307.62K Per Second  94.35M Total 177.86K Deleted Scan:  0.00 Rate:  0.00
+[0098] 327.78K Per Second  95.96M Total 150.56K Deleted Scan:  0.00 Rate:  0.00
+[0099] 299.02K Per Second  97.45M Total  92.18K Deleted Scan:  0.00 Rate:  0.00
+[0100] 297.98K Per Second  98.85M Total 167.06K Deleted Scan:  0.00 Rate:  0.00
+
+08/02/20 02:29:41
+avg-cpu:  %user   %nice %system %iowait  %steal   %idle
+          13.31    0.00   28.28   58.41    0.00    0.00
+
+Device:            tps    MB_read/s    MB_wrtn/s    MB_read    MB_wrtn
+sdb            6649.50         2.50        60.21         24        602
+sda               2.70         0.19         0.04          1          0
+dm-0              1.30         0.19         0.00          1          0
+dm-1             10.90         0.00         0.04          0          0
+
+1.6G    /data
+
+Results are very flappy. It's hot, then it's cold.
+Maybe we can calculate the derivative and adjust deletion rates toward equilibrium.
+The problem is that 1 second timestamp resolution in history means we delete the entire second or none at all.
+This causes flappy behavior when inserts are fast and deletes are slow.
+Let's continue to a longer test.
+
+Next test: 60s TTL w/ 1B items
+
+
+
+--- 256c (256/256) 1B Keys @ 92bits (256M/256M) w/ Key Size 12 w/ 60s Rotating Delete (NVME + NVME) --- local vm
+
+
+
+> time go run populate/main.go --kv lmdb --valsz 0 --keys_mil 1000 --dir=$DATADIR -keysz 12 -n 16 -p -sp 16 -batchsize 100 -keypfx 4 -keytrunc 4 -sync-every 100 -fill -history -exp 60s
+[0000]   1.07M Per Second   5.36M Total  0.00 Deleted Scan:  0.00 Rate:  0.00
+[0001]   1.20M Per Second  11.36M Total  0.00 Deleted Scan:  0.00 Rate:  0.00
+[0002]   1.19M Per Second  17.32M Total  0.00 Deleted Scan:  0.00 Rate:  0.00
+[0003]   1.27M Per Second  23.19M Total  0.00 Deleted Scan:  0.00 Rate:  0.00
+
+avg-cpu:  %user   %nice %system %iowait  %steal   %idle
+          65.77    0.00   25.43    4.61    0.00    4.19
+
+Device:            tps    MB_read/s    MB_wrtn/s    MB_read    MB_wrtn
+sdb            1900.70         0.00        54.17          0        542
+sda               0.70         0.00         0.00          0          0
+dm-0              0.20         0.00         0.00          0          0
+dm-1              0.50         0.00         0.00          0          0
+
+-------------------------- SNIP -------------------------
+
+[0011]   1.07M Per Second  61.00M Total   4.12K Deleted Scan:  0.00 Rate:  0.00
+[0012] 194.00K Per Second  61.24M Total  35.56K Deleted Scan:  0.00 Rate:  0.00
+[0013]   6.48K Per Second  61.27M Total  93.18K Deleted Scan:  0.00 Rate:  0.00
+[0014]  14.68K Per Second  61.35M Total 102.88K Deleted Scan:  0.00 Rate:  0.00
+[0015]   4.38K Per Second  61.37M Total 149.14K Deleted Scan:  0.00 Rate:  0.00
+[0016]   2.14K Per Second  61.38M Total  64.02K Deleted Scan:  0.00 Rate:  0.00
+[0017]  0.00   Per Second  61.38M Total  0.00   Deleted Scan:  0.00 Rate:  0.00
+[0018]   8.58K Per Second  61.42M Total 711.70K Deleted Scan:  0.00 Rate:  0.00
+[0019]   2.18K Per Second  61.44M Total  15.82K Deleted Scan:  0.00 Rate:  0.00
+
+avg-cpu:  %user   %nice %system %iowait  %steal   %idle
+           9.70    0.00   12.86   77.44    0.00    0.00
+
+Device:            tps    MB_read/s    MB_wrtn/s    MB_read    MB_wrtn
+sdb            2014.80         7.86         0.09         78          0
+sda               0.00         0.00         0.00          0          0
+dm-0              0.00         0.00         0.00          0          0
+dm-1              0.00         0.00         0.00          0          0
+
+-------------------------- SNIP -------------------------
+[0050]   4.26K Per Second  61.87M Total 180.34K Deleted Scan:  0.00 Rate:  0.00
+               Data Items:  Depth:  Branch Pages:  Leaf Pages:  Overflow Pages:
+                33.93M       3.00       5.00         721.00         0.00
+[0051]   2.26K Per Second  61.88M Total   8.28K Deleted Scan:  0.00 Rate:  0.00
+               Data Items:  Depth:  Branch Pages:  Leaf Pages:  Overflow Pages:
+                33.88M       3.00       5.00         720.00         0.00
+[0052]  14.12K Per Second  61.95M Total 248.36K Deleted Scan:  0.00 Rate:  0.00
+               Data Items:  Depth:  Branch Pages:  Leaf Pages:  Overflow Pages:
+                32.71M       3.00       5.00         695.00         0.00
+
+avg-cpu:  %user   %nice %system %iowait  %steal   %idle
+           6.82    0.00    8.95   84.23    0.00    0.00
+
+Device:            tps    MB_read/s    MB_wrtn/s    MB_read    MB_wrtn
+sdb            1365.10         4.39         3.41         43         34
+sda               4.80         0.67         0.00          6          0
+dm-0              4.80         0.67         0.00          6          0
+dm-1              0.00         0.00         0.00          0          0
+
+
+
+It's still a mess. Let's try a rate limiter.
+
+
+
+--- 256c (256/256) 1B Keys @ 92bits (256M/256M) w/ Key Size 20 w/ 360s Rotating Delete w/ Limit 100k (SSD + SSD) --- local vm
+
+
+avg-cpu:  %user   %nice %system %iowait  %steal   %idle
+          23.19    0.00   12.36    4.83    0.00   59.62
+
+Device:            tps    MB_read/s    MB_wrtn/s    MB_read    MB_wrtn
+sdb             789.80         0.00        18.72          0        187
+sda               1.90         0.19         0.00          1          0
+dm-0              1.80         0.19         0.00          1          0
+dm-1              0.80         0.00         0.00          0          0
+
+4.5G    /data
+                64.99M       3.00       8.00           1.88K         0.00
+[0070] 186.20K Per Second  65.89M Total  0.00 Deleted Scan:  0.00 Rate:  0.00
+               Data Items:  Depth:  Branch Pages:  Leaf Pages:  Overflow Pages:
+                65.92M       3.00       8.00           1.91K         0.00
+[0071] 169.94K Per Second  66.74M Total   3.24K Deleted Scan:  0.00 Rate:  0.00
+               Data Items:  Depth:  Branch Pages:  Leaf Pages:  Overflow Pages:
+                66.75M       3.00       8.00           1.93K         0.00
+[0072]  20.34K Per Second  66.83M Total 110.60K Deleted Scan:  0.00 Rate:  0.00
+               Data Items:  Depth:  Branch Pages:  Leaf Pages:  Overflow Pages:
+                66.29M       3.00       8.00           1.92K         0.00
+[0073]  10.80K Per Second  66.88M Total  89.74K Deleted Scan:  0.00 Rate:  0.00
+               Data Items:  Depth:  Branch Pages:  Leaf Pages:  Overflow Pages:
+                65.90M       3.00       8.00           1.91K         0.00
+
+
+avg-cpu:  %user   %nice %system %iowait  %steal   %idle
+          13.04    0.00   17.70   69.26    0.00    0.00
+
+Device:            tps    MB_read/s    MB_wrtn/s    MB_read    MB_wrtn
+sdb            2411.70         9.20         2.85         92         28
+sda               0.00         0.00         0.00          0          0
+dm-0              0.00         0.00         0.00          0          0
+dm-1              0.00         0.00         0.00          0          0
+
+4.6G    /data
+
+
+
+--- 256c (256/256) 100M Keys @ 92bits (256M/256M) w/ Key Size 20 w/ History (SSD) --- local vm -- sample set 100M20
+
+
+
+> time go run populate/main.go --kv lmdb --valsz 0 --keys_mil 100 --dir=$DATADIR -keysz 20 -n 16 -p -sp 16 -batchsize 1000 -keypfx 4 -keytrunc 4 -sync-every 100 -fill -history -limit 5000
+[0000]   1.56M Per Second   7.79M Total  0.00 Deleted Scan:  0.00 Rate:  0.00
+[0001]   1.82M Per Second  16.01M Total  0.00 Deleted Scan:  0.00 Rate:  0.00
+[0002]   1.60M Per Second  21.40M Total  0.00 Deleted Scan:  0.00 Rate:  0.00
+-------------------------- SNIP -------------------------
+[0013]   1.52M Per Second  88.17M Total  0.00 Deleted Scan:  0.00 Rate:  0.00
+[0014]   1.57M Per Second  94.94M Total  0.00 Deleted Scan:  0.00 Rate:  0.00
+[0015]   1.12M Per Second 100.00M Total  0.00 Deleted Scan:  0.00 Rate:  0.00
+real    1m22.586s
+user    1m47.467s
+sys     0m16.056s
+
+avg-cpu:  %user   %nice %system %iowait  %steal   %idle
+          78.95    0.00   13.54    5.10    0.00    2.42
+
+Device:            tps    MB_read/s    MB_wrtn/s    MB_read    MB_wrtn
+sdb            1297.10         0.01       100.15          0       1002
+sda               0.20         0.00         0.00          0          0
+dm-0              0.00         0.00         0.00          0          0
+dm-1              0.40         0.00         0.00          0          0
+
+6.7G    /data/100m20
+
+
+
+--- 256c (256/256) 100M Keys @ 92bits (256M/256M) w/ Key Size 12 w/ History (SSD) --- local vm -- sample set 100m12
+
+
+
+>  time go run populate/main.go --kv lmdb --valsz 0 --keys_mil 100 --dir=$DATADIR -keysz 12 -n 16 -p -sp 16 -batchsize 1000 -keypfx 4 -keytrunc 4 -sync-every 100 -fill -history -limit 5000
+TOTAL KEYS TO WRITE: 100.00M
+WITH VALUE SIZE:  0.00
+WITH HISTORY
+WITH RANDOM KEYS
+BATCH SIZE 1000
+CONCURRENCY 16
+KEY SIZE 12
+KEY PREFIX 4
+KEY SPACE 268.44M
+KEY TRUNCATE 4
+PARTITIONED
+Init lmdb
+Initialized after 28.881952ms
+
+[0000]   1.53M Per Second   7.63M Total  0.00 Deleted Scan:  0.00 Rate:  0.00
+[0001]   1.81M Per Second  16.69M Total  0.00 Deleted Scan:  0.00 Rate:  0.00
+[0002]   1.69M Per Second  25.13M Total  0.00 Deleted Scan:  0.00 Rate:  0.00
+-------------------------- SNIP -------------------------
+[0011]   1.63M Per Second  87.69M Total  0.00 Deleted Scan:  0.00 Rate:  0.00
+[0012]   1.56M Per Second  95.25M Total  0.00 Deleted Scan:  0.00 Rate:  0.00
+[0013] 965.60K Per Second 100.08M Total  0.00 Deleted Scan:  0.00 Rate:  0.00
+real    1m11.815s
+user    1m46.647s
+sys     0m9.859s
+
+avg-cpu:  %user   %nice %system %iowait  %steal   %idle
+          75.80    0.00   18.02    2.16    0.00    4.02
+
+Device:            tps    MB_read/s    MB_wrtn/s    MB_read    MB_wrtn
+sdb            1217.30         0.00        73.61          0        736
+sda              10.10         0.31         0.00          3          0
+dm-0             10.00         0.31         0.00          3          0
+dm-1              0.10         0.00         0.00          0          0
+
+4.4G    /data/100m16
+
+
+
+--- 256c (256/256) 1B Keys @ 92bits (256M/256M) w/ Key Size 20 w/ 60s Rotating Delete (SSD) --- local vm -- against 100m20
+
+
+
+> time go run populate/main.go --kv lmdb --valsz 0 --keys_mil 100 --dir=$DATADIR -keysz 12 -n 16 -p -sp 16 -batchsize 100 -keypfx 4 -keytrunc 4 -sync-every 100 -fill -history -limit 10 -exp 30s -a
+
+
+

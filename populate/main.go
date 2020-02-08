@@ -52,9 +52,11 @@ var (
 	batchSize = flag.Int("batchsize", 1000, "Batch Size")
 	tsonly    = flag.Bool("tsonly", false, "Store timeseries only")
 	syncWrite = flag.Bool("sync", false, "Strong durability")
+	syncMeta  = flag.Bool("syncmeta", false, "Strong durability for metadata")
 	syncEvery = flag.Int("sync-every", 0, "Number of batches after which to force sync")
 	n         = flag.Int("n", 1, "Number of concurrent writers")
 	a         = flag.Bool("a", false, "Do not delete existing database (append)")
+	i         = flag.Int("i", 10, "Stats interval")
 	partition = flag.Bool("p", false, "Partition per writer")
 	subparts  = flag.Int("sp", 1, "Subpartitions per writer")
 	fill      = flag.Bool("fill", false, "Fill entire keyspace")
@@ -132,12 +134,13 @@ var lmdbEnvs = map[int]*lmdb.Env{}
 var lmdbEnvHistories = map[int]*lmdb.Env{}
 var lmdbDBIs = map[int]lmdb.DBI{}
 var lmdbDBIHistories = map[int]lmdb.DBI{}
-var interval = time.Duration(5)
+var interval = time.Duration(*i)
 var scan = ratecounter.NewRateCounter(interval * time.Second)
 var deletions = ratecounter.NewRateCounter(interval * time.Second)
 var keylen int
 var subkeylen int
 var initSize int64
+var N int
 
 func writeBatch(entries []*entry, batchNum, workerNum int) int {
 	var prev *entry
@@ -150,9 +153,9 @@ func writeBatch(entries []*entry, batchNum, workerNum int) int {
 
 	var t = time.Now()
 	var ts = make([]byte, 8)
-	binary.BigEndian.PutUint64(ts, uint64(t.Unix()))
+	binary.BigEndian.PutUint64(ts, uint64(t.UnixNano()))
 	var expts = make([]byte, 8)
-	binary.BigEndian.PutUint64(expts, uint64(t.Add(-1 * *exp).Unix()))
+	binary.BigEndian.PutUint64(expts, uint64(t.Add(-1 * *exp).UnixNano()))
 
 	var lmdbEnv = lmdbEnv
 	if len(lmdbEnvs) > 0 {
@@ -322,42 +325,58 @@ func writeBatch(entries []*entry, batchNum, workerNum int) int {
 				return err
 			}
 			defer hcur.Close()
+			if *exp < 1 || !*history {
+				return nil
+			}
+			// Sweep history
+			for {
+				_, v, err := hcur.Get(nil, nil, lmdb.NextNoDup)
+				if lmdb.IsNotFound(err) {
+					break
+				}
+				if err != nil {
+					return err
+				}
+				for {
+					ts, vals, err := hcur.Get(nil, nil, lmdb.NextMultiple)
+					if lmdb.IsNotFound(err) {
+						break
+					}
+					if err != nil {
+						return err
+					}
+					if bytes.Compare(ts, expts) > 0 {
+						break
+					}
+					multi := lmdb.WrapMulti(vals, keylen)
+					for i := 0; i < multi.Len(); i++ {
+						v = multi.Val(i)
+						err = txn.Del(lmdbDBI, v[:*keypfx], v[*keypfx:])
+						if err != nil {
+							if lmdb.IsNotFound(err) {
+								// fmt.Printf("%x %x Not Found\n", v[:*keypfx], v[*keypfx:])
+								y.Check(err)
+								return err
+							} else {
+								y.Check(err)
+								return err
+							}
+						}
+						deleted++
+					}
+				}
+				hcur.Del(lmdb.NoDupData)
+				if float64(deleted) >= float64(len(entries)) * 1.25 {
+					break
+				}
+			}
+			// Insert history
 			if err = hcur.PutMulti(ts, keys, keylen, 0); err != nil {
 				return err
 			}
 			return nil
 		})
 		y.Check(err)
-		if *exp > 0 && *history {
-			err = lmdbEnv.Update(func(txn *lmdb.Txn) error {
-				cur, err := txn.OpenCursor(lmdbDBIHistory)
-				if err != nil {
-					return err
-				}
-				defer cur.Close()
-				for {
-					k, keys, err := cur.Get(nil, nil, lmdb.Next)
-					if lmdb.IsNotFound(err) {
-						return nil
-					}
-					if err != nil {
-						return err
-					}
-					if bytes.Compare(k, expts) > 0 {
-						break
-					}
-					for i := 0; i < len(keys); i += keylen {
-						txn.Del(lmdbDBI, keys[i:i+*keypfx], keys[i+*keypfx:i+keylen-*keypfx])
-						deleted++
-					}
-					cur.Del(lmdb.NoDupData)
-					if float64(deleted) > float64(*batchSize) * 1.5 {
-						return nil
-					}
-				}
-				return nil
-			})
-		}
 		if *syncEvery > 0 && batchNum % *syncEvery == 0 {
 			lmdbEnv.Sync(true)
 		}
@@ -546,7 +565,10 @@ func main() {
 		start := time.Now()
 		o := lmdb.NoReadahead|lmdb.NoMemInit
 		if !*syncWrite {
-			o |= lmdb.NoSync|lmdb.NoMetaSync
+			o |= lmdb.NoSync
+		}
+		if !*syncMeta {
+			o |= lmdb.NoMetaSync
 		}
 		var err error
 		var dbopt = lmdb.DupSort|lmdb.DupFixed|lmdb.Create
@@ -618,7 +640,7 @@ func main() {
 		t := time.NewTicker(interval * time.Second)
 		defer t.Stop()
 		report := func() {
-			c := atomic.LoadInt64(&counter)
+			// c := atomic.LoadInt64(&counter)
 			kps := rc.Rate()
 			kpsd := kps
 			if kpsd < 1 {
@@ -629,37 +651,49 @@ func main() {
 			var branchPages int64
 			var leafPages int64
 			var overflowPages int64
-			// for i, env := range lmdbEnvs {
-				// env.View(func(txn *lmdb.Txn) error {
-					// stat, _ := txn.Stat(lmdbDBIs[i])
-					// dataItems += int64(stat.Entries)
-					// depth += int64(stat.Depth)
-					// branchPages += int64(stat.BranchPages)
-					// leafPages += int64(stat.LeafPages)
-					// overflowPages += int64(stat.OverflowPages)
-					// return nil
-				// })
-			// }
-			fmt.Printf(`
-[%04d] %s Per Second %s Total %s Deleted Scan: %s Rate: %s
-               Data Items:  Depth:  Branch Pages:  Leaf Pages:  Overflow Pages:
-               %s      %s      %s         %s        %s`,
-				count,
-				humanize(kps/int64(interval)),
-				humanize(c),
-				humanize(deletions.Rate()/int64(interval)),
-				humanize(scan.Rate()/int64(interval)),
-				humanizeFloat(float64(scan.Rate())/float64(kpsd)),
-				humanize(dataItems),
-				humanizeFloat(float64(depth) / float64(len(lmdbEnvs))),
-				humanize(branchPages / int64(len(lmdbEnvs))),
-				humanize(leafPages / int64(len(lmdbEnvs))),
-				humanize(overflowPages / int64(len(lmdbEnvs))))
+			for i, env := range lmdbEnvs {
+				env.View(func(txn *lmdb.Txn) error {
+					stat, _ := txn.Stat(lmdbDBIs[i])
+					dataItems += int64(stat.Entries)
+					depth += int64(stat.Depth)
+					branchPages += int64(stat.BranchPages)
+					leafPages += int64(stat.LeafPages)
+					overflowPages += int64(stat.OverflowPages)
+					return nil
+				})
+			}
+			// fmt.Printf(`
+// [%04d] %s Per Second %s Total %s Deleted Scan: %s Rate: %s
+               // Data Items:  Depth:  Branch Pages:  Leaf Pages:  Overflow Pages:
+               // %s      %s      %s         %s        %s`,
+				// count,
+				// humanize(kps/int64(interval)),
+				// humanize(c),
+				// humanize(deletions.Rate()/int64(interval)),
+				// humanize(scan.Rate()/int64(interval)),
+				// humanizeFloat(float64(scan.Rate())/float64(kpsd)),
+				// humanize(dataItems),
+				// humanizeFloat(float64(depth) / float64(len(lmdbEnvs))),
+				// humanize(branchPages / int64(len(lmdbEnvs))),
+				// humanize(leafPages / int64(len(lmdbEnvs))),
+				// humanize(overflowPages / int64(len(lmdbEnvs))))
+			fmt.Printf("%d,%d,%d,%d,%d,%d\n",
+				dataItems,
+				kps,
+				int64(scan.Rate()),
+				int64(depth) / int64(len(lmdbEnvs)),
+				int64(branchPages) / int64(len(lmdbEnvs)),
+				int64(leafPages) / int64(len(lmdbEnvs)))
 			count++
 		}
+		var headers bool
 		for {
 			select {
 			case <-t.C:
+				if !headers {
+					fmt.Printf("total,rate,scans,depth,branchnodes,leafnodes\n")
+					headers = true
+				}
 				report()
 			case <-ctx.Done():
 				report()
@@ -673,7 +707,7 @@ func main() {
 		}
 	}()
 
-	N := *n * *subparts
+	N = *n * *subparts
 	var wg sync.WaitGroup
 	for i := 0; i < N; i++ {
 		wg.Add(1)
