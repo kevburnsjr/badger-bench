@@ -75,6 +75,11 @@ sudo mkfs -t ext4 /dev/sdb
 sudo mkdir /data
 sudo mount /dev/sdb /data
 
+sudo mkfs -t ext4 /dev/sdc
+sudo mkdir /data-nvme
+sudo mount /dev/sdc /data-nvme
+
+
 sudo mkfs -t ext4 /dev/xvdf
 sudo mkdir /data-ebs
 sudo mount /dev/xvdf /data-ebs
