@@ -66,6 +66,7 @@ var (
 	exp       = flag.Duration("exp", 0, "Seconds after which an item expires")
 	noent     = flag.Bool("noent", false, "Disable entropy")
 	ts4byte   = flag.Bool("ts4byte", false, "Use 4 byte history timestamp")
+	shards    = flag.Int("shards", 1, "Number of shards")
 )
 
 type entry struct {
@@ -135,8 +136,8 @@ var lmdbDBI lmdb.DBI
 var lmdbDBIHistory lmdb.DBI
 var lmdbEnvs = map[int]*lmdb.Env{}
 var lmdbEnvHistories = map[int]*lmdb.Env{}
-var lmdbDBIs = map[int]lmdb.DBI{}
-var lmdbDBIHistories = map[int]lmdb.DBI{}
+var lmdbDBIs = map[int][]lmdb.DBI{}
+var lmdbDBIHistories = map[int][]lmdb.DBI{}
 var interval = time.Duration(*intv)
 var scan = ratecounter.NewRateCounter(interval * time.Second)
 var deletions = ratecounter.NewRateCounter(interval * time.Second)
@@ -326,27 +327,30 @@ func writeBatch(entries []*entry, batchNum, workerNum int) int {
 		start := time.Now()
 		err = lmdbEnv.Update(func(txn *lmdb.Txn) error {
 			statSync.Lock()
-			stats[workerNum], _ = txn.Stat(lmdbDBI)
+			stats[workerNum], _ = txn.Stat(lmdbDBI[0])
 			statSync.Unlock()
 			if !*tsonly {
-				cur, err := txn.OpenCursor(lmdbDBI)
-				if err != nil {
-					return err
-				}
-				defer cur.Close()
 				for _, e := range entries {
+					shard := (int(e.Key[0])*256 + int(e.Key[1])) % *shards
+					cur, err := txn.OpenCursor(lmdbDBI[shard])
+					y.Check(err)
+					if err != nil {
+						return err
+					}
 					err = cur.Put(e.Key[:*keypfx], e.Key[*keypfx:], lmdb.NoDupData)
 					if err != nil {
 						return err
 					}
 					n, _ := cur.Count()
 					scanned += int64(n - 1)
+					cur.Close()
 				}
 				if !*history {
 					return nil
 				}
 			}
-			hcur, err := txn.OpenCursor(lmdbDBIHistory)
+			hcur, err := txn.OpenCursor(lmdbDBIHistory[0])
+			y.Check(err)
 			if err != nil {
 				return err
 			}
@@ -378,7 +382,7 @@ func writeBatch(entries []*entry, batchNum, workerNum int) int {
 						multi := lmdb.WrapMulti(vals, keylen)
 						for i := 0; i < multi.Len(); i++ {
 							v = multi.Val(i)
-							err = txn.Del(lmdbDBI, v[:*keypfx], v[*keypfx:])
+							err = txn.Del(lmdbDBI[0], v[:*keypfx], v[*keypfx:])
 							if err != nil {
 								if lmdb.IsNotFound(err) {
 									// fmt.Printf("%x %x Not Found\n", v[:*keypfx], v[*keypfx:])
@@ -620,23 +624,29 @@ func main() {
 		if *intdup {
 			dbopt |= MDB_INTEGERDUP
 		}
-		var openlmdb = func(path string, i int) (env *lmdb.Env, dbi lmdb.DBI, dbih lmdb.DBI) {
+		var openlmdb = func(path string, i int) (env *lmdb.Env, dbis []lmdb.DBI, dbihs []lmdb.DBI) {
 			if !*a {
 				os.RemoveAll(path)
 			}
 			os.MkdirAll(path, 0777)
 			env, err = lmdb.NewEnv()
-			env.SetMaxDBs(2)
+			env.SetMaxDBs(*shards * 2)
 			env.SetMapSize(int64(1 << 37))
 			env.Open(path, uint(o), 0777)
+			dbis = make([]lmdb.DBI, *shards)
+			dbihs = make([]lmdb.DBI, *shards)
 			err = env.Update(func(txn *lmdb.Txn) error {
-				dbi, err = txn.OpenDBI("bench", uint(dbopt))
-				if err != nil {
-					return err
-				}
-				dbih, err = txn.OpenDBI("bench-history", uint(dbopt))
-				if err != nil {
-					return err
+				for j := 0; j < *shards; j++ {
+					dbi, err := txn.OpenDBI(fmt.Sprintf("bench-%d", j), uint(dbopt))
+					if err != nil {
+						return err
+					}
+					dbih, err := txn.OpenDBI(fmt.Sprintf("bench-history-%d", j), uint(dbopt))
+					if err != nil {
+						return err
+					}
+					dbis[j] = dbi
+					dbihs[j] = dbih
 				}
 				return nil
 			})
@@ -723,8 +733,8 @@ func main() {
 					// humanize(atomic.LoadInt64(&branchPages) / int64(len(lmdbEnvs))),
 					// humanize(atomic.LoadInt64(&leafPages) / int64(len(lmdbEnvs))),
 					// humanize(atomic.LoadInt64(&overflowPages) / int64(len(lmdbEnvs))))
-				fmt.Printf("%d,%d,%d,%d,%d,%d,%d\n",
-					dataItems,
+				fmt.Printf("%s,%d,%d,%d,%d,%d,%d\n",
+					humanize(dataItems * int64(*shards)),
 					kps/int64(interval),
 					int64(scan.Rate())/int64(interval),
 					atomic.LoadInt64(&depth) / int64(len(lmdbEnvs)),

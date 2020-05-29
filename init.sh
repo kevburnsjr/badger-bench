@@ -56,6 +56,10 @@ echo '
 *               -       nofile         999999
 ' | sudo tee -a /etc/security/limits.conf
 
+echo 100 | sudo tee /proc/sys/vm/dirty_expire_centisecs
+echo 100 | sudo tee /proc/sys/vm/dirty_writeback_centisecs
+echo 60 | sudo tee /proc/sys/vm/dirty_ratio
+
 exit
 
 # Copy/paste this
