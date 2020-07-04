@@ -801,6 +801,9 @@ func main() {
 	// }()
 
 	var wg sync.WaitGroup
+	var written int64
+	var batchno int
+	var entries = make([][]*entry, N)
 	for i := 0; i < N; i++ {
 		wg.Add(1)
 		go func(proc int) {
@@ -816,8 +819,8 @@ func main() {
 				wg.Done()
 				return
 			}
-			entries := make([]*entry, *batchSize)
-			for i := 0; i < len(entries); i++ {
+			entries[proc] = make([]*entry, *batchSize)
+			for i := 0; i < len(entries[proc]); i++ {
 				e := new(entry)
 				if *seqKeys {
 					e.Key = make([]byte, 8)
@@ -825,23 +828,25 @@ func main() {
 					e.Key = make([]byte, *keySize)
 				}
 				e.Value = make([]byte, *valueSize)
-				entries[i] = e
-			}
-			var written float64
-			var i int
-			for written < nw/float64(N) {
-				wrote := float64(writeBatch(entries, i, proc))
-
-				wi := int64(wrote)
-				atomic.AddInt64(&counter, wi)
-
-				rc.Incr(wi)
-
-				written += wrote
-				i++
+				entries[proc][i] = e
 			}
 			wg.Done()
 		}(i)
+	}
+	wg.Wait()
+	for written < int64(nw) {
+		for i := 0; i < N; i++ {
+			wg.Add(1)
+			go func(proc, batchno int) {
+				wrote := int64(writeBatch(entries[proc], batchno, proc))
+				atomic.AddInt64(&counter, wrote)
+				atomic.AddInt64(&written, wrote)
+				rc.Incr(wrote)
+				wg.Done()
+			}(i, batchno)
+		}
+		wg.Wait()
+		batchno++
 	}
 	// 	wg.Add(1) // Block
 	wg.Wait()
