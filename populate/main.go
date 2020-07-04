@@ -21,6 +21,7 @@ import (
 
 	"github.com/bmatsuo/lmdb-go/lmdb"
 	"github.com/boltdb/bolt"
+	// bolt "go.etcd.io/bbolt"
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger-bench/store"
 	"github.com/dgraph-io/badger/options"
@@ -33,6 +34,7 @@ import (
 
 const mil float64 = 1000000
 
+const MDB_INTEGERKEY = 0x08
 const MDB_INTEGERDUP = 0x20
 
 var (
@@ -67,6 +69,9 @@ var (
 	noent     = flag.Bool("noent", false, "Disable entropy")
 	ts4byte   = flag.Bool("ts4byte", false, "Use 4 byte history timestamp")
 	shards    = flag.Int("shards", 1, "Number of shards")
+	dropshards = flag.Int("dropshards", 0, "Number of shards to delete")
+	no        = flag.Int("no", 0, "Node offset")
+	nolock    = flag.Bool("nolock", false, "Disable database locks")
 )
 
 type entry struct {
@@ -99,7 +104,14 @@ func fillEntry(e, prev *entry, workerNum, batchNum, entryNum int) {
 			rand.Read(e.Key)
 		} else {
 			a := sha1.Sum(prev.Key)
-			e.Key = a[:keylen]
+			if len(a) < len(prev.Key) {
+				a2 := sha1.Sum(a[:])
+				a3 := append([]byte{}, a[:]...)
+				a3 = append(a3, a2[:]...)
+				e.Key = a3[:keylen]
+			} else {
+				e.Key = a[:keylen]
+			}
 		}
 	}
 	// Fill is used to distribute keys sequentially over entire key space. You should see 0
@@ -329,6 +341,8 @@ func writeBatch(entries []*entry, batchNum, workerNum int) int {
 			statSync.Lock()
 			stats[workerNum], _ = txn.Stat(lmdbDBI[0])
 			statSync.Unlock()
+			// println(stats[workerNum].Entries)
+			// time.Sleep(1*time.Second)
 			if !*tsonly {
 				for _, e := range entries {
 					shard := (int(e.Key[0])*256 + int(e.Key[1])) % *shards
@@ -488,6 +502,7 @@ func main() {
 	nw := *numKeys * mil
 	fmt.Printf("TOTAL KEYS TO WRITE: %s\n", humanize(int64(nw)))
 	fmt.Printf("WITH VALUE SIZE: %s\n", humanize(int64(*valueSize)))
+	fmt.Printf("TO DIRECTORY: %s\n", *dir)
 	if *withRead {
 		fmt.Printf("WITH READ\n")
 	}
@@ -510,15 +525,18 @@ func main() {
 	fmt.Printf("KEY SIZE %d\n", *keySize)
 	fmt.Printf("KEY PREFIX %d\n", *keypfx)
 	if *partition {
-		fmt.Printf("KEY SPACE %s\n", humanize(int64(*n * *subparts * int(math.Pow(2, float64((8*(*keypfx-1)-*keytrunc)))))))
+		fmt.Printf("KEY SPACE %s\n", humanize(int64(*n * *subparts * int(math.Pow(2, float64((8*(*keypfx)-*keytrunc)))))))
 	} else {
-		fmt.Printf("KEY SPACE %s\n", humanize(int64(256 * int(math.Pow(2, float64((8*(*keypfx-1)-*keytrunc)))))))
+		fmt.Printf("KEY SPACE %s\n", humanize(int64(256 * int(math.Pow(2, float64((8*(*keypfx)-*keytrunc)))))))
 	}
 	if *keytrunc > 0 {
 		fmt.Printf("KEY TRUNCATE %d\n", *keytrunc)
 	}
 	if *partition {
 		fmt.Printf("PARTITIONED\n")
+	}
+	if *intdup {
+		fmt.Printf("MDB_INTEGERDUP ENABLED\n")
 	}
 	if *a {
 		fmt.Printf("APPEND\n")
@@ -616,13 +634,17 @@ func main() {
 		if !*syncWrite {
 			o |= lmdb.NoSync
 		}
+		if *nolock {
+			o |= lmdb.NoLock
+		}
 		if !*syncMeta {
 			o |= lmdb.NoMetaSync
 		}
 		var err error
 		var dbopt = lmdb.DupSort|lmdb.DupFixed|lmdb.Create
+		var dbhopt = dbopt
 		if *intdup {
-			dbopt |= MDB_INTEGERDUP
+			dbopt |= MDB_INTEGERDUP|MDB_INTEGERKEY
 		}
 		var openlmdb = func(path string, i int) (env *lmdb.Env, dbis []lmdb.DBI, dbihs []lmdb.DBI) {
 			if !*a {
@@ -641,7 +663,7 @@ func main() {
 					if err != nil {
 						return err
 					}
-					dbih, err := txn.OpenDBI(fmt.Sprintf("bench-history-%d", j), uint(dbopt))
+					dbih, err := txn.OpenDBI(fmt.Sprintf("bench-history-%d", j), uint(dbhopt))
 					if err != nil {
 						return err
 					}
@@ -742,8 +764,8 @@ func main() {
 					atomic.LoadInt64(&leafPages) / int64(len(lmdbEnvs)),
 					deletions.Rate()/int64(interval))
 			} else {
-				fmt.Printf("%d,%d,%d\n",
-					c,
+				fmt.Printf("%s,%d,%d\n",
+					humanize(c),
 					kps/int64(interval),
 					int64(scan.Rate()))
 				// fmt.Printf(`
@@ -782,6 +804,18 @@ func main() {
 	for i := 0; i < N; i++ {
 		wg.Add(1)
 		go func(proc int) {
+			if *dropshards > 0 {
+				err = lmdbEnvs[proc].Update(func(txn *lmdb.Txn) error {
+					for j := 0; j < *dropshards; j++ {
+						txn.Drop(lmdbDBIs[proc][j], true)
+						txn.Drop(lmdbDBIHistories[proc][j], true)
+					}
+					return nil
+				})
+				fmt.Printf("Dropped %d shards\n", *dropshards)
+				wg.Done()
+				return
+			}
 			entries := make([]*entry, *batchSize)
 			for i := 0; i < len(entries); i++ {
 				e := new(entry)
