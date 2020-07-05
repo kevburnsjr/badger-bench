@@ -333,101 +333,20 @@ func writeBatch(entries []*entry, batchNum, workerNum int) int {
 	// LMDB
 	if lmdbEnv != nil {
 		var lmdbDBI = lmdbDBIs[workerNum]
-		var lmdbDBIHistory = lmdbDBIHistories[workerNum]
 		var scanned int64
 		var deleted int64
 		start := time.Now()
 		err = lmdbEnv.Update(func(txn *lmdb.Txn) error {
+			for _, e := range entries {
+				shard := (int(e.Key[0])*256 + int(e.Key[1])) % *shards
+				err = txn.Put(lmdbDBI[shard], e.Key[2:*keypfx], e.Key[*keypfx:], lmdb.NoOverwrite)
+				if err != nil {
+					return err
+				}
+			}
 			statSync.Lock()
 			stats[workerNum], _ = txn.Stat(lmdbDBI[0])
 			statSync.Unlock()
-			// println(stats[workerNum].Entries)
-			// time.Sleep(1*time.Second)
-			if !*tsonly {
-				for _, e := range entries {
-					shard := (int(e.Key[0])*256 + int(e.Key[1])) % *shards
-					cur, err := txn.OpenCursor(lmdbDBI[shard])
-					y.Check(err)
-					if err != nil {
-						return err
-					}
-					err = cur.Put(e.Key[:*keypfx], e.Key[*keypfx:], lmdb.NoDupData)
-					if err != nil {
-						return err
-					}
-					n, _ := cur.Count()
-					scanned += int64(n - 1)
-					cur.Close()
-				}
-				if !*history {
-					return nil
-				}
-			}
-			hcur, err := txn.OpenCursor(lmdbDBIHistory[0])
-			y.Check(err)
-			if err != nil {
-				return err
-			}
-			defer hcur.Close()
-			if *exp > 1 {
-				// Sweep history
-				var sweep bool
-				for {
-					_, v, err := hcur.Get(nil, nil, lmdb.NextNoDup)
-					if lmdb.IsNotFound(err) {
-						break
-					}
-					if err != nil {
-						return err
-					}
-					sweep = false
-					for {
-						hts, vals, err := hcur.Get(nil, nil, lmdb.NextMultiple)
-						if lmdb.IsNotFound(err) {
-							break
-						}
-						if err != nil {
-							return err
-						}
-						if bytes.Compare(hts, expts) > 0 {
-							break
-						}
-						sweep = true
-						multi := lmdb.WrapMulti(vals, keylen)
-						for i := 0; i < multi.Len(); i++ {
-							v = multi.Val(i)
-							err = txn.Del(lmdbDBI[0], v[:*keypfx], v[*keypfx:])
-							if err != nil {
-								if lmdb.IsNotFound(err) {
-									// fmt.Printf("%x %x Not Found\n", v[:*keypfx], v[*keypfx:])
-									y.Check(err)
-									return err
-								} else {
-									y.Check(err)
-									return err
-								}
-							}
-							deleted++
-						}
-					}
-					if sweep {
-						hcur.Del(lmdb.NoDupData)
-					} else {
-						break
-					}
-					if float64(deleted) >= float64(len(entries)) /* * 1.25 */ {
-						break
-					}
-				}
-			}
-			// Insert history
-			for i, e := range entries {
-				copy(keys[i*keylen:i*keylen+keylen], e.Key)
-			}
-			err = hcur.PutMulti(ts, keys, keylen, 0)
-			if err != nil {
-				return err
-			}
 			return nil
 		})
 		// os.Exit(1)
@@ -642,33 +561,26 @@ func main() {
 		}
 		var err error
 		var dbopt = lmdb.DupSort|lmdb.DupFixed|lmdb.Create
-		var dbhopt = dbopt
 		if *intdup {
 			dbopt |= MDB_INTEGERDUP|MDB_INTEGERKEY
 		}
-		var openlmdb = func(path string, i int) (env *lmdb.Env, dbis []lmdb.DBI, dbihs []lmdb.DBI) {
+		var openlmdb = func(path string, i int) (env *lmdb.Env, dbis []lmdb.DBI) {
 			if !*a {
 				os.RemoveAll(path)
 			}
 			os.MkdirAll(path, 0777)
 			env, err = lmdb.NewEnv()
-			env.SetMaxDBs(*shards * 2)
-			env.SetMapSize(int64(1 << 37))
+			env.SetMaxDBs(65536)
+			env.SetMapSize(int64(1 << 38))
 			env.Open(path, uint(o), 0777)
 			dbis = make([]lmdb.DBI, *shards)
-			dbihs = make([]lmdb.DBI, *shards)
 			err = env.Update(func(txn *lmdb.Txn) error {
 				for j := 0; j < *shards; j++ {
 					dbi, err := txn.OpenDBI(fmt.Sprintf("bench-%d", j), uint(dbopt))
 					if err != nil {
 						return err
 					}
-					dbih, err := txn.OpenDBI(fmt.Sprintf("bench-history-%d", j), uint(dbhopt))
-					if err != nil {
-						return err
-					}
 					dbis[j] = dbi
-					dbihs[j] = dbih
 				}
 				return nil
 			})
@@ -679,7 +591,7 @@ func main() {
 			for j := 0; j < *subparts; j++ {
 				s := i * *subparts + j
 				path := fmt.Sprintf(*dir+"/%x/lmdb/%x%x", i, i, j)
-				lmdbEnvs[s], lmdbDBIs[s], lmdbDBIHistories[s] = openlmdb(path, s)
+				lmdbEnvs[s], lmdbDBIs[s] = openlmdb(path, s)
 			}
 		}
 		fmt.Printf("Initialized after %v\n", time.Now().Sub(start))
