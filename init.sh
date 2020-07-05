@@ -1,6 +1,6 @@
 cd ~
 
-sudo yum install -y gcc-c++ git htop iotop atop snappy snappy-devel zlib zlib-devel bzip2 bzip2-devel lz4-devel sysstat
+sudo yum install -y gcc-c++ git htop iotop atop snappy snappy-devel zlib zlib-devel bzip2 bzip2-devel lz4-devel sysstat wget nano
 
 sudo mkdir /data-ebs
 sudo chown ec2-user:ec2-user /data-ebs
@@ -58,11 +58,14 @@ echo '
 
 echo 100 | sudo tee /proc/sys/vm/dirty_expire_centisecs
 echo 100 | sudo tee /proc/sys/vm/dirty_writeback_centisecs
-echo 60 | sudo tee /proc/sys/vm/dirty_ratio
+echo 50 | sudo tee /proc/sys/vm/dirty_background_ratio
+echo 80 | sudo tee /proc/sys/vm/dirty_ratio
 
 exit
 
 # Copy/paste this
+#---
+
 sudo yum install -y git
 git clone https://github.com/kevburnsjr/badger-bench
 cd ~/badger-bench
@@ -74,6 +77,40 @@ sudo mkdir /data
 sudo mount /dev/nvme0n1 /data
 sudo chown ec2-user:ec2-user /data
 
+#---
+# end
+
+# GCP
+
+sudo mkfs -t ext4 /dev/nvme0n1
+sudo mkdir /data1
+sudo mount /dev/nvme0n1 /data1
+sudo chown kevburnsjr:kevburnsjr /data1
+
+sudo mkfs -t ext4 /dev/nvme0n2
+sudo mkdir /data2
+sudo mount /dev/nvme0n2 /data2
+sudo chown kevburnsjr:kevburnsjr /data2
+
+sudo mkfs -t ext4 /dev/nvme0n3
+sudo mkdir /data3
+sudo mount /dev/nvme0n3 /data3
+sudo chown kevburnsjr:kevburnsjr /data3
+
+sudo mkfs -t ext4 /dev/nvme0n4
+sudo mkdir /data4
+sudo mount /dev/nvme0n4 /data4
+sudo chown kevburnsjr:kevburnsjr /data4
+
+sudo mkdir /data
+sudo chown kevburnsjr:kevburnsjr /data
+sudo mkdir /data/test
+ln -s /data1 /data/test/0
+ln -s /data2 /data/test/1
+ln -s /data3 /data/test/2
+ln -s /data4 /data/test/3
+
+#---
 
 sudo mkfs -t ext4 /dev/sdb
 sudo mkdir /data
@@ -111,3 +148,20 @@ sudo mkdir /data-ebs
 sudo mount /dev/nvme2n1 /data-ebs
 sudo chown ec2-user:ec2-user /data-ebs
 
+# i3.2xl nvme partitions
+sudo mkfs -t ext4 /dev/nvme0n1p1
+sudo mkfs -t ext4 /dev/nvme0n1p2
+sudo mkfs -t ext4 /dev/nvme0n1p3
+sudo mkfs -t ext4 /dev/nvme0n1p4
+sudo mkdir -p /data/0
+sudo mkdir -p /data/1
+sudo mkdir -p /data/2
+sudo mkdir -p /data/3
+sudo mount /dev/nvme0n1p1 /data/0
+sudo mount /dev/nvme0n1p2 /data/1
+sudo mount /dev/nvme0n1p3 /data/2
+sudo mount /dev/nvme0n1p4 /data/3
+sudo chown ec2-user:ec2-user /data/0
+sudo chown ec2-user:ec2-user /data/1
+sudo chown ec2-user:ec2-user /data/2
+sudo chown ec2-user:ec2-user /data/3
