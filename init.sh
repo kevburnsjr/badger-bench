@@ -1,12 +1,13 @@
 cd ~
 
-sudo yum install -y gcc-c++ git htop iotop atop snappy snappy-devel zlib zlib-devel bzip2 bzip2-devel lz4-devel sysstat wget nano
+sudo yum install -y gcc-c++ git htop iotop atop snappy snappy-devel zlib zlib-devel bzip2 bzip2-devel lz4-devel sysstat wget nano make
 
 sudo mkdir /data-ebs
 sudo chown ec2-user:ec2-user /data-ebs
 
+cd ~
 wget https://raw.githubusercontent.com/git/git/master/contrib/completion/git-prompt.sh
-mv git-prompt.sh /home/ec2-user/.git-prompt.sh
+mv git-prompt.sh .git-prompt.sh
 cat <<EOF | tee -a ~/.bashrc
 source ~/.git-prompt.sh
 PS1='\[\033[0;34m\]loadtest\[\033[0;33m\] \w\[\033[00m\]\$(__git_ps1)\n> '
@@ -15,15 +16,6 @@ alias ..="cd .."
 export DATADIR=/data
 export DATADIREBS=/data-ebs
 EOF
-
-export ROCKSVERSION=5.1.4
-wget https://github.com/facebook/rocksdb/archive/v$ROCKSVERSION.tar.gz
-tar -xzvf v$ROCKSVERSION.tar.gz
-cd rocksdb-$ROCKSVERSION
-export USE_RTTI=1 && make shared_lib
-sudo make install-shared
-sudo ldconfig # to update ld.so.cache
-echo "export LD_LIBRARY_PATH=/home/ec2-user/rocksdb-$ROCKSVERSION/" >> ~/.bashrc
 
 source ~/.bashrc
 
@@ -66,7 +58,7 @@ exit
 # Copy/paste this
 #---
 
-sudo yum install -y git
+sudo yum install -y git wget
 git clone https://github.com/kevburnsjr/badger-bench
 cd ~/badger-bench
 chmod +x init.sh
@@ -83,28 +75,24 @@ sudo chown ec2-user:ec2-user /data
 # GCP
 
 sudo mkfs -t ext4 /dev/nvme0n1
+sudo mkfs -t ext4 /dev/nvme0n2
+sudo mkfs -t ext4 /dev/nvme0n3
+sudo mkfs -t ext4 /dev/nvme0n4
+
 sudo mkdir /data1
 sudo mount /dev/nvme0n1 /data1
 sudo chown kevburnsjr:kevburnsjr /data1
-
-sudo mkfs -t ext4 /dev/nvme0n2
 sudo mkdir /data2
 sudo mount /dev/nvme0n2 /data2
 sudo chown kevburnsjr:kevburnsjr /data2
-
-sudo mkfs -t ext4 /dev/nvme0n3
 sudo mkdir /data3
 sudo mount /dev/nvme0n3 /data3
 sudo chown kevburnsjr:kevburnsjr /data3
-
-sudo mkfs -t ext4 /dev/nvme0n4
 sudo mkdir /data4
 sudo mount /dev/nvme0n4 /data4
 sudo chown kevburnsjr:kevburnsjr /data4
-
-sudo mkdir /data
-sudo chown kevburnsjr:kevburnsjr /data
-sudo mkdir /data/test
+sudo mkdir -p /data/test
+sudo chown kevburnsjr:kevburnsjr /data/test
 ln -s /data1 /data/test/0
 ln -s /data2 /data/test/1
 ln -s /data3 /data/test/2
