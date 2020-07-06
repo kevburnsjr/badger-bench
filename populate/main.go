@@ -85,6 +85,12 @@ func Reverse(s string) string {
     }
     return string(runes)
 }
+func ReverseBytes(a []byte) {
+    for i := len(a)/2-1; i >= 0; i-- {
+		opp := len(a)-1-i
+		a[i], a[opp] = a[opp], a[i]
+	}
+}
 
 func fillEntry(e, prev *entry, workerNum, batchNum, entryNum int) {
 	// k := rand.Int() % int(*numKeys*mil)
@@ -287,9 +293,18 @@ func writeBatch(entries []*entry, batchNum, workerNum int) int {
 		err = lmdbEnv.Update(func(txn *lmdb.Txn) error {
 			for _, e := range entries {
 				shard := (int(e.Key[0])*256 + int(e.Key[1])) % *shards
-				err = txn.Put(lmdbDBI[shard], e.Key[2:*keypfx], e.Key[*keypfx:], lmdb.NoOverwrite)
+				err = txn.Put(lmdbDBI[shard], e.Key[2:*keypfx], e.Key[*keypfx:], lmdb.NoDupData)
 				if err != nil {
 					return err
+				}
+				if *readOther {
+					ReverseBytes(e.Key)
+					shard = (int(e.Key[0])*256 + int(e.Key[1])) % *shards
+					_, err = txn.Get(lmdbDBI[shard], e.Key[2:*keypfx])
+					if err == nil {
+						println("duplicate")
+						continue
+					}
 				}
 			}
 			statSync.Lock()
