@@ -307,9 +307,6 @@ func writeBatch(entries []*entry, batchNum, workerNum int) int {
 					}
 				}
 			}
-			statSync.Lock()
-			stats[workerNum], _ = txn.Stat(lmdbDBI[0])
-			statSync.Unlock()
 			return nil
 		})
 		// os.Exit(1)
@@ -569,6 +566,19 @@ func main() {
 				atomic.StoreInt64(&overflowPages, int64(0))
 				statSync.Lock()
 				for i := 0; i < N; i++ {
+					var lmdbDBI = lmdbDBIs[i]
+					err = lmdbEnvs[i].View(func(txn *lmdb.Txn) error {
+						stats[i], _ = txn.Stat(lmdbDBI[0])
+						for j := 1; j < len(lmdbDBI); j++ {
+							st, _ := txn.Stat(lmdbDBI[j])
+							stats[i].Depth += st.Depth
+							stats[i].Entries += st.Entries
+							stats[i].BranchPages += st.BranchPages
+							stats[i].LeafPages += st.LeafPages
+							stats[i].OverflowPages += st.OverflowPages
+						}
+						return nil
+					})
 					atomic.AddInt64(&dataItems, int64(stats[i].Entries))
 					atomic.AddInt64(&depth, int64(stats[i].Depth))
 					atomic.AddInt64(&branchPages, int64(stats[i].BranchPages))
@@ -593,13 +603,13 @@ func main() {
 					// humanize(atomic.LoadInt64(&branchPages) / int64(len(lmdbEnvs))),
 					// humanize(atomic.LoadInt64(&leafPages) / int64(len(lmdbEnvs))),
 					// humanize(atomic.LoadInt64(&overflowPages) / int64(len(lmdbEnvs))))
-				fmt.Printf("%s,%d,%d,%d,%d,%d,%d\n",
-					humanize(dataItems * int64(*shards)),
+				fmt.Printf("%s,%d,%d,%.2f,%d,%d,%d\n",
+					humanize(dataItems),
 					kps/int64(interval),
 					int64(scan.Rate())/int64(interval),
-					atomic.LoadInt64(&depth) / int64(len(lmdbEnvs)),
-					atomic.LoadInt64(&branchPages) / int64(len(lmdbEnvs)),
-					atomic.LoadInt64(&leafPages) / int64(len(lmdbEnvs)),
+					float64(atomic.LoadInt64(&depth)) / float64(len(lmdbEnvs) * *shards),
+					atomic.LoadInt64(&branchPages),
+					atomic.LoadInt64(&leafPages),
 					deletions.Rate()/int64(interval))
 			} else {
 				fmt.Printf("%s,%d,%d\n",
@@ -672,20 +682,25 @@ func main() {
 		}(i)
 	}
 	wg.Wait()
-	for written < int64(nw) {
-		for i := 0; i < N; i++ {
-			wg.Add(1)
-			go func(proc, batchno int) {
-				wrote := int64(writeBatch(entries[proc], batchno, proc))
-				atomic.AddInt64(&counter, wrote)
-				atomic.AddInt64(&written, wrote)
-				rc.Incr(wrote)
-				wg.Done()
-			}(i, batchno)
+	var runworker = func(){
+		for written < int64(nw) {
+			var wg2 sync.WaitGroup
+			for i := 0; i < N; i++ {
+				wg2.Add(1)
+				go func(proc, batchno int) {
+					wrote := int64(writeBatch(entries[proc], batchno, proc))
+					atomic.AddInt64(&counter, wrote)
+					atomic.AddInt64(&written, wrote)
+					rc.Incr(wrote)
+					wg2.Done()
+				}(i, batchno)
+			}
+			wg2.Wait()
 		}
-		wg.Wait()
-		batchno++
+		wg.Done()
 	}
+	wg.Add(1)
+	go runworker()
 	// 	wg.Add(1) // Block
 	wg.Wait()
 	cancel()
