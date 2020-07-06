@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"bytes"
 	"crypto/sha1"
 	"log"
 	"math"
@@ -23,7 +22,6 @@ import (
 	"github.com/boltdb/bolt"
 	// bolt "go.etcd.io/bbolt"
 	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/badger-bench/store"
 	"github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/badger/y"
 	"github.com/paulbellamy/ratecounter"
@@ -135,10 +133,6 @@ func fillEntry(e, prev *entry, workerNum, batchNum, entryNum int) {
 
 var bdb *badger.DB
 
-var rdb *store.Store
-var rdbs = map[int]*store.Store{}
-var rdbhistory *store.Store
-var rdbhistories = map[int]*store.Store{}
 var boltdb *bolt.DB
 var ldb *leveldb.DB
 var ldbhistories = map[int]*leveldb.DB{}
@@ -195,13 +189,6 @@ func writeBatch(entries []*entry, batchNum, workerNum int) int {
 	var lmdbEnv = lmdbEnv
 	if len(lmdbEnvs) > 0 {
 		lmdbEnv = lmdbEnvs[workerNum]
-	}
-
-	subkeylen := keylen - *keypfx
-
-	var rdb = rdb
-	if len(rdbs) > 0 {
-		rdb = rdbs[workerNum]
 	}
 
 	// Badger
@@ -289,45 +276,6 @@ func writeBatch(entries []*entry, batchNum, workerNum int) int {
 			return nil
 		})
 		y.Check(err)
-	}
-
-	// RocksDB
-	if rdb != nil {
-		var rdbhistory = rdbhistory
-		if len(rdbhistories) > 0 {
-			rdbhistory = rdbhistories[workerNum]
-		}
-		var scanned int64
-		rb := rdb.NewWriteBatch()
-		defer rb.Destroy()
-		for i, e := range entries {
-			slice, err := rdb.Get(e.Key[0:*keypfx])
-			y.Check(err)
-			var v = slice.Data()
-			var duplicate = false
-			for j := 0; j < len(v); j += subkeylen {
-				scanned++
-				if bytes.Equal(v[j:j+(subkeylen)], e.Key[*keypfx:]) {
-					duplicate = true
-					break
-				}
-			}
-			if duplicate {
-				println("duplicate")
-				continue
-			}
-			v = append(v, e.Key[*keypfx:]...)
-			if !*tsonly {
-				rb.Put(e.Key[0:*keypfx], v)
-			}
-			copy(keys[i*keylen:i*keylen+keylen], e.Key)
-		}
-		if *history || *tsonly {
-			y.Check(rdbhistory.SetOne(ts, keys))
-		}
-		rb.Put([]byte("checkpoint"), ts)
-		y.Check(rdb.WriteBatch(rb))
-		scan.Incr(scanned)
 	}
 
 	// LMDB
@@ -479,43 +427,6 @@ func main() {
 		if err != nil {
 			log.Fatalf("while opening badger: %v", err)
 		}
-	} else if *which == "rocksdb" {
-		init = true
-		fmt.Println("Init Rocks")
-		start := time.Now()
-		if *partition {
-			for i := 0; i < *n; i++ {
-				d := fmt.Sprintf(*dir+"/%x/rocks", i)
-				if !*a {
-					os.RemoveAll(d)
-				}
-				os.MkdirAll(d, 0777)
-				if *syncWrite {
-					rdbs[i], err = store.NewSyncStore(d)
-				} else {
-					rdbs[i], err = store.NewStore(d)
-				}
-				y.Check(err)
-				d = fmt.Sprintf(*dir+"/%x/rocks.ts", i)
-				os.MkdirAll(d, 0777)
-				rdbhistories[i], err = store.NewSyncStore(d)
-				y.Check(err)
-			}
-		} else {
-			if !*a {
-				os.RemoveAll(*dir + "/rocks")
-				os.MkdirAll(*dir+"/rocks", 0777)
-			}
-			if *syncWrite {
-				rdb, err = store.NewSyncStore(*dir + "/rocks")
-			} else {
-				rdb, err = store.NewStore(*dir + "/rocks")
-			}
-			y.Check(err)
-			rdbhistory, err = store.NewSyncStore(*dir + "/rocks.ts")
-			y.Check(err)
-		}
-		fmt.Printf("Initialized after %v\n", time.Now().Sub(start))
 	} else if *which == "bolt" {
 		init = true
 		fmt.Println("Init BoltDB")
@@ -767,11 +678,6 @@ func main() {
 	if bdb != nil {
 		fmt.Println("closing badger")
 		bdb.Close()
-	}
-
-	if rdb != nil {
-		fmt.Println("closing rocks")
-		rdb.Close()
 	}
 
 	if ldb != nil {
