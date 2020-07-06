@@ -603,8 +603,8 @@ func main() {
 					// humanize(atomic.LoadInt64(&branchPages) / int64(len(lmdbEnvs))),
 					// humanize(atomic.LoadInt64(&leafPages) / int64(len(lmdbEnvs))),
 					// humanize(atomic.LoadInt64(&overflowPages) / int64(len(lmdbEnvs))))
-				fmt.Printf("%s,%d,%d,%.2f,%d,%d,%d\n",
-					humanize(dataItems),
+				fmt.Printf("%d,%d,%d,%.2f,%d,%d,%d\n",
+					dataItems,
 					kps/int64(interval),
 					int64(scan.Rate())/int64(interval),
 					float64(atomic.LoadInt64(&depth)) / float64(len(lmdbEnvs) * *shards),
