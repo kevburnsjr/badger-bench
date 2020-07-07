@@ -15,6 +15,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"path"
 
 	"golang.org/x/net/trace"
 
@@ -427,6 +428,7 @@ func main() {
 
 	var err error
 	var init bool
+	var paths = make([]string, N)
 
 	if *which == "badger" {
 		init = true
@@ -487,15 +489,15 @@ func main() {
 		if *intdup {
 			dbopt |= MDB_INTEGERDUP|MDB_INTEGERKEY
 		}
-		var openlmdb = func(path string, i int) (env *lmdb.Env, dbis []lmdb.DBI) {
+		var openlmdb = func(p string, i int) (env *lmdb.Env, dbis []lmdb.DBI) {
 			if !*a {
-				os.RemoveAll(path)
+				os.RemoveAll(p)
 			}
-			os.MkdirAll(path, 0777)
+			os.MkdirAll(path.Dir(p), 0777)
 			env, err = lmdb.NewEnv()
 			env.SetMaxDBs(65536)
 			env.SetMapSize(int64(1 << 38))
-			env.Open(path, uint(o), 0777)
+			env.Open(p, uint(o|lmdb.NoSubdir), 0777)
 			dbis = make([]lmdb.DBI, *shards)
 			err = env.Update(func(txn *lmdb.Txn) error {
 				for j := 0; j < *shards; j++ {
@@ -513,8 +515,8 @@ func main() {
 		for i := 0; i < *n; i++ {
 			for j := 0; j < *subparts; j++ {
 				s := i * *subparts + j
-				path := fmt.Sprintf(*dir+"/%x/lmdb/%x%x", i, i, j)
-				lmdbEnvs[s], lmdbDBIs[s] = openlmdb(path, s)
+				paths[s] = fmt.Sprintf(*dir+"/%x/%x%x.db", i, i, j)
+				lmdbEnvs[s], lmdbDBIs[s] = openlmdb(paths[s], s)
 			}
 		}
 		fmt.Printf("Initialized after %v\n", time.Now().Sub(start))
@@ -524,12 +526,12 @@ func main() {
 	if len(*ldbhist) > 0 {
 		init = true
 		fmt.Println("Init LevelDB")
-		var openlvldb = func(path string, i int) {
+		var openlvldb = func(p string, i int) {
 			if !*a {
-				os.RemoveAll(path)
+				os.RemoveAll(p)
 			}
-			os.MkdirAll(path, 0777)
-			ldbhistories[i], err = leveldb.OpenFile(path+"/level.db", nil)
+			os.MkdirAll(p, 0777)
+			ldbhistories[i], err = leveldb.OpenFile(p+"/level.db", nil)
 			y.Check(err)
 		}
 		for i := 0; i < *n; i++ {
@@ -565,6 +567,7 @@ func main() {
 				atomic.StoreInt64(&leafPages, int64(0))
 				atomic.StoreInt64(&overflowPages, int64(0))
 				statSync.Lock()
+				var dbsize int64
 				for i := 0; i < N; i++ {
 					var lmdbDBI = lmdbDBIs[i]
 					err = lmdbEnvs[i].View(func(txn *lmdb.Txn) error {
@@ -579,6 +582,8 @@ func main() {
 						}
 						return nil
 					})
+					fstat, _ := os.Stat(paths[i])
+					atomic.AddInt64(&dbsize, fstat.Size())
 					atomic.AddInt64(&dataItems, int64(stats[i].Entries))
 					atomic.AddInt64(&depth, int64(stats[i].Depth))
 					atomic.AddInt64(&branchPages, int64(stats[i].BranchPages))
@@ -603,13 +608,14 @@ func main() {
 					// humanize(atomic.LoadInt64(&branchPages) / int64(len(lmdbEnvs))),
 					// humanize(atomic.LoadInt64(&leafPages) / int64(len(lmdbEnvs))),
 					// humanize(atomic.LoadInt64(&overflowPages) / int64(len(lmdbEnvs))))
-				fmt.Printf("%d,%d,%d,%.2f,%d,%d,%d\n",
+				fmt.Printf("%d,%d,%d,%.2f,%d,%d,%d,%d\n",
 					dataItems,
 					kps/int64(interval),
 					int64(scan.Rate())/int64(interval),
 					float64(atomic.LoadInt64(&depth)) / float64(len(lmdbEnvs) * *shards),
 					atomic.LoadInt64(&branchPages),
 					atomic.LoadInt64(&leafPages),
+					atomic.LoadInt64(&dbsize),
 					deletions.Rate()/int64(interval))
 			} else {
 				fmt.Printf("%s,%d,%d\n",
@@ -632,7 +638,7 @@ func main() {
 			select {
 			case <-t.C:
 				if !headers {
-					fmt.Printf("total,rate,scans,depth,branchnodes,leafnodes,deletes\n")
+					fmt.Printf("total,rate,scans,depth,branchnodes,leafnodes,dbsize,deletes\n")
 					headers = true
 				}
 				report()
