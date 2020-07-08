@@ -1,6 +1,7 @@
 cd ~
 
-sudo yum install -y gcc-c++ git htop iotop atop snappy snappy-devel zlib zlib-devel bzip2 bzip2-devel lz4-devel sysstat wget nano make
+sudo yum install -y epel-release
+sudo yum install -y gcc git htop iotop atop sysstat wget nano make
 
 sudo mkdir /data-ebs
 sudo chown ec2-user:ec2-user /data-ebs
