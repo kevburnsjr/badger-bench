@@ -48,6 +48,7 @@ var (
 	withRead  = flag.Bool("read", false, "Read each key prior to write.")
 	keypfx    = flag.Int("keypfx", 3, "Bucket key size")
 	keytrunc  = flag.Int("keytrunc", 0, "Truncate n bits from bucket key")
+	keychop   = flag.Int("keychop", 2, "Chop bytes used for shards off key")
 	readOther = flag.Bool("read-other", false, "Read an unrelated key prior to each write.")
 	seqKeys   = flag.Bool("keys_seq", false, "Use sequential keys.")
 	batchSize = flag.Int("batchsize", 1000, "Batch Size")
@@ -294,23 +295,13 @@ func writeBatch(entries []*entry, batchNum, workerNum int) int {
 		err = lmdbEnv.Update(func(txn *lmdb.Txn) error {
 			for _, e := range entries {
 				shard := (int(e.Key[0])*256 + int(e.Key[1])) % *shards
-				err = txn.Put(lmdbDBI[shard], e.Key[2:*keypfx], e.Key[*keypfx:], lmdb.NoDupData)
+				err = txn.Put(lmdbDBI[shard], e.Key[*keychop:*keypfx], e.Key[*keypfx:], lmdb.NoDupData)
 				if err != nil {
 					return err
-				}
-				if *readOther {
-					ReverseBytes(e.Key)
-					shard = (int(e.Key[0])*256 + int(e.Key[1])) % *shards
-					_, err = txn.Get(lmdbDBI[shard], e.Key[2:*keypfx])
-					if err == nil {
-						println("duplicate")
-						continue
-					}
 				}
 			}
 			return nil
 		})
-		// os.Exit(1)
 		y.Check(err)
 		put.Incr(int64(time.Since(start).Microseconds()))
 		start = time.Now()
