@@ -21,7 +21,7 @@ import (
 
 	"github.com/bmatsuo/lmdb-go/lmdb"
 	"github.com/boltdb/bolt"
-	// bolt "go.etcd.io/bbolt"
+	"go.etcd.io/bbolt"
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/badger/y"
@@ -29,6 +29,7 @@ import (
 	"github.com/pkg/profile"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
+	etcd "github.com/etcd-io/etcd/clientv3"
 )
 
 const mil float64 = 1000000
@@ -128,8 +129,10 @@ func fillEntry(e, prev *entry, workerNum, batchNum, entryNum int) {
 			binary.BigEndian.PutUint16(e.Key[1:*keypfx], uint16(batchNum * *batchSize + entryNum + *filloff) << *keytrunc)
 		} else if *keypfx == 4 {
 			binary.BigEndian.PutUint32(e.Key[:*keypfx], uint32(batchNum * *batchSize + entryNum + *filloff) << *keytrunc)
+		} else {
+			binary.BigEndian.PutUint64(e.Key[:8], uint64(batchNum * *batchSize + entryNum + *filloff) << *keytrunc)
 		}
-	} else {
+	} else if *keypfx > 0 {
 		e.Key[*keypfx-1] = e.Key[*keypfx-1] << *keytrunc
 	}
 	if *partition {
@@ -142,6 +145,8 @@ func fillEntry(e, prev *entry, workerNum, batchNum, entryNum int) {
 var bdb *badger.DB
 
 var boltdb *bolt.DB
+var bboltdb *bbolt.DB
+var etcdb etcd.KV
 var ldb *leveldb.DB
 var ldbhistories = map[int]*leveldb.DB{}
 var lmdbEnv *lmdb.Env
@@ -286,6 +291,47 @@ func writeBatch(entries []*entry, batchNum, workerNum int) int {
 		y.Check(err)
 	}
 
+	// Etcd's bolt
+	if bboltdb != nil {
+		err := bboltdb.Batch(func(txn *bbolt.Tx) error {
+			boltBkt := txn.Bucket([]byte("bench"))
+			y.AssertTrue(boltBkt != nil)
+			for i, e := range entries {
+				k := e.Key
+				if *readOther {
+					k = []byte(Reverse(string(k)))
+				}
+				v := boltBkt.Get(k)
+				if len(v) > 0 {
+					println("duplicate")
+					continue
+				}
+				if !*tsonly {
+					if err := boltBkt.Put(e.Key, e.Value); err != nil {
+						return err
+					}
+				}
+				copy(keys[i*keylen:i*keylen+keylen], e.Key)
+			}
+			if *history || *tsonly {
+				if err := boltBkt.Put(ts, keys); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+		y.Check(err)
+	}
+
+	// Etcd
+	if etcdb != nil {
+		ctx := context.Background()
+		for _, e := range entries {
+			_, err := etcdb.Put(ctx, fmt.Sprintf("/%s", string(e.Key)), string(e.Value))
+			y.Check(err)
+		}
+	}
+
 	// LMDB
 	if lmdbEnv != nil {
 		var lmdbDBI = lmdbDBIs[workerNum]
@@ -322,9 +368,9 @@ func humanize(n int64) string {
 		return fmt.Sprintf("%6.2fM", float64(n)/1000000.0)
 	}
 	if n >= 1000 {
-		return fmt.Sprintf("%6.2fK", float64(n)/1000.0)
+		return fmt.Sprintf("%6.0fK", float64(n)/1000.0)
 	}
-	return fmt.Sprintf("%5.2f", float64(n))
+	return fmt.Sprintf("%5.0f", float64(n))
 }
 
 func humanizeFloat(n float64) string {
@@ -332,9 +378,9 @@ func humanizeFloat(n float64) string {
 		return fmt.Sprintf("%6.2fM", n/1000000.0)
 	}
 	if n >= 1000 {
-		return fmt.Sprintf("%6.2fK", n/1000.0)
+		return fmt.Sprintf("%6.0fK", n/1000.0)
 	}
-	return fmt.Sprintf("%5.2f", n)
+	return fmt.Sprintf("%5.0f", n)
 }
 
 type logger struct {}
@@ -448,6 +494,33 @@ func main() {
 			return err
 		})
 		y.Check(err)
+
+	} else if *which == "bbolt" {
+		init = true
+		fmt.Println("Init Etcd's bolt")
+		if !*a {
+			os.RemoveAll(*dir + "/bbolt")
+			os.MkdirAll(*dir+"/bbolt", 0777)
+		}
+		bboltdb, err = bbolt.Open(*dir+"/bbolt/bbolt.db", 0777, bbolt.DefaultOptions)
+		y.Check(err)
+		bboltdb.NoSync = !*syncWrite // Set this to speed up writes
+		err = bboltdb.Update(func(txn *bbolt.Tx) error {
+			var err error
+			_, err = txn.CreateBucketIfNotExists([]byte("bench"))
+			return err
+		})
+		y.Check(err)
+
+	} else if *which == "etcd" {
+		init = true
+		fmt.Println("Init Etcd")
+		c, err := etcd.New(etcd.Config{
+			Endpoints:               []string{"http://127.0.0.1:2379"},
+			DialTimeout: time.Second,
+		})
+		y.Check(err)
+		etcdb = etcd.NewKV(c)
 
 	} else if *which == "leveldb" {
 		init = true
@@ -609,10 +682,10 @@ func main() {
 					atomic.LoadInt64(&dbsize),
 					deletions.Rate()/int64(interval))
 			} else {
-				fmt.Printf("%s,%d,%d\n",
-					humanize(c),
-					kps/int64(interval),
-					int64(scan.Rate()))
+				fmt.Printf("%d\t%d\n",
+					c,
+					kps/int64(interval))
+					// int64(scan.Rate()))
 				// fmt.Printf(`
 // [%04d] %s Per Second %s Total %s Deleted Scan: %s Rate: %s`,
 					// count,
@@ -715,6 +788,11 @@ func main() {
 	if boltdb != nil {
 		fmt.Println("closing bolt")
 		boltdb.Close()
+	}
+
+	if bboltdb != nil {
+		fmt.Println("closing bbolt")
+		bboltdb.Close()
 	}
 
 	if lmdbEnv != nil {
