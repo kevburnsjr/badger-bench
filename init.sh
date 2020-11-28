@@ -3,15 +3,12 @@ cd ~
 sudo yum install -y epel-release
 sudo yum install -y gcc git htop iotop atop sysstat wget nano make
 
-sudo mkdir /data-ebs
-sudo chown ec2-user:ec2-user /data-ebs
-
 cd ~
 wget https://raw.githubusercontent.com/git/git/master/contrib/completion/git-prompt.sh
 mv git-prompt.sh .git-prompt.sh
 cat <<EOF | tee -a ~/.bashrc
 source ~/.git-prompt.sh
-PS1='\[\033[0;34m\]loadtest\[\033[0;33m\] \w\[\033[00m\]\$(__git_ps1)\n> '
+PS1='\[\033[0;34m\]testgcp1\[\033[0;33m\] \w\[\033[00m\]\$(__git_ps1)\n> '
 alias l="ls -la"
 alias ..="cd .."
 export DATADIR=/data
@@ -29,8 +26,8 @@ case $(uname -m) in
 esac
 
 cd ~
-wget https://storage.googleapis.com/golang/go1.13.7.linux-$arch.tar.gz
-sudo tar -C /usr/local -xzf go1.13.7.linux-$arch.tar.gz
+wget https://storage.googleapis.com/golang/go1.15.1.linux-$arch.tar.gz
+sudo tar -C /usr/local -xzf go1.15.1.linux-$arch.tar.gz
 sudo ln -s /usr/local/go/bin/go /usr/bin/go
 sudo mkdir /usr/local/share/go
 sudo mkdir /usr/local/share/go/bin
@@ -54,6 +51,13 @@ echo 100 | sudo tee /proc/sys/vm/dirty_writeback_centisecs
 echo 50 | sudo tee /proc/sys/vm/dirty_background_ratio
 echo 80 | sudo tee /proc/sys/vm/dirty_ratio
 
+echo "10.150.0.9 shackle-1" | sudo tee -a /etc/hosts
+echo "10.150.0.10 shackle-2" | sudo tee -a /etc/hosts
+echo "10.150.0.8 shackle-3" | sudo tee -a /etc/hosts
+
+git init --bare shackle.git
+git clone shackle.git
+
 exit
 
 # Copy/paste this
@@ -68,7 +72,7 @@ chmod +x init.sh
 sudo mkfs -t ext4 /dev/nvme0n1
 sudo mkdir /data
 sudo mount /dev/nvme0n1 /data
-sudo chown ec2-user:ec2-user /data
+sudo chown centos:centos /data
 
 #---
 # end
@@ -76,28 +80,24 @@ sudo chown ec2-user:ec2-user /data
 # GCP
 
 sudo mkfs -t ext4 /dev/nvme0n1
-sudo mkfs -t ext4 /dev/nvme0n2
-sudo mkfs -t ext4 /dev/nvme0n3
-sudo mkfs -t ext4 /dev/nvme0n4
+sudo mkdir /data
+sudo mount /dev/nvme0n1 /data
+sudo mkdir /data/node
+sudo chown -R kevburnsjr:kevburnsjr /data
 
-sudo mkdir /data1
-sudo mount /dev/nvme0n1 /data1
-sudo chown kevburnsjr:kevburnsjr /data1
+sudo mkdir -p /data-ebs/raft
+sudo chown -R kevburnsjr:kevburnsjr /data-ebs
+
 sudo mkdir /data2
 sudo mount /dev/nvme0n2 /data2
 sudo chown kevburnsjr:kevburnsjr /data2
-sudo mkdir /data3
-sudo mount /dev/nvme0n3 /data3
-sudo chown kevburnsjr:kevburnsjr /data3
-sudo mkdir /data4
-sudo mount /dev/nvme0n4 /data4
-sudo chown kevburnsjr:kevburnsjr /data4
-sudo mkdir -p /data/test
-sudo chown kevburnsjr:kevburnsjr /data/test
-ln -s /data1 /data/test/0
-ln -s /data2 /data/test/1
-ln -s /data3 /data/test/2
-ln -s /data4 /data/test/3
+
+sudo mkdir -p /data/test1
+sudo mkdir /data1/test1
+sudo mkdir /data2/test1
+sudo chown kevburnsjr:kevburnsjr /data/test1
+ln -s /data1/test1 /data/test1/0
+ln -s /data2/test1 /data/test1/1
 
 #---
 
@@ -154,3 +154,19 @@ sudo chown ec2-user:ec2-user /data/0
 sudo chown ec2-user:ec2-user /data/1
 sudo chown ec2-user:ec2-user /data/2
 sudo chown ec2-user:ec2-user /data/3
+
+# Local
+
+sudo mkfs -t ext4 /dev/sdb
+sudo mkdir /data
+sudo mount /dev/sdb /data
+
+sudo mkfs -t ext4 /dev/sdc
+sudo mkdir /data-magnetic
+sudo mount /dev/sdc /data-magnetic
+
+# Centos 8
+sudo mkfs -t ext4 /dev/nvme0n1
+sudo mkdir /data
+sudo mount /dev/nvme0n1 /data
+sudo chown -R centos:centos /data

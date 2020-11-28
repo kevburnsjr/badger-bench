@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"flag"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"encoding/binary"
+	"encoding/hex"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -30,6 +32,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	etcd "github.com/etcd-io/etcd/clientv3"
+	"github.com/cockroachdb/pebble"
 )
 
 const mil float64 = 1000000
@@ -57,22 +60,29 @@ var (
 	syncWrite = flag.Bool("sync", false, "Strong durability")
 	syncMeta  = flag.Bool("syncmeta", false, "Strong durability for metadata")
 	syncEvery = flag.Int("sync-every", 0, "Number of batches after which to force sync")
+	logEvery  = flag.Int("log-every", 0, "Number of batches after which to log the shard, key and value")
 	n         = flag.Int("n", 1, "Number of concurrent writers")
 	a         = flag.Bool("a", false, "Do not delete existing database (append)")
-	intv      = flag.Int("intv", 10, "Stats interval")
+	intv      = flag.Int("intv", 1, "Stats interval")
 	partition = flag.Bool("p", false, "Partition per writer")
 	subparts  = flag.Int("sp", 1, "Subpartitions per writer")
 	fill      = flag.Bool("fill", false, "Fill entire keyspace")
 	filloff   = flag.Int("filloffset", 0, "Fill offset")
+	intkey    = flag.Bool("intkey", false, "MDB_INTEGERKEY")
 	intdup    = flag.Bool("intdup", false, "MDB_INTEGERDUP")
 	delmax    = flag.Int("delmax", 100000, "Maximum number of records to remove in a delete transaction")
 	exp       = flag.Duration("exp", 0, "Seconds after which an item expires")
 	noent     = flag.Bool("noent", false, "Disable entropy")
 	ts4byte   = flag.Bool("ts4byte", false, "Use 4 byte history timestamp")
 	shards    = flag.Int("shards", 1, "Number of shards")
+	shardLen  = flag.Int("shardlen", 2, "Length of shard id")
+	workspace = flag.String("workspace", "", "Workspace name")
 	dropshards = flag.Int("dropshards", 0, "Number of shards to delete")
 	no        = flag.Int("no", 0, "Node offset")
 	nolock    = flag.Bool("nolock", false, "Disable database locks")
+	split     = flag.Bool("split", false, "Splits the first shard")
+	copyEnv   = flag.Bool("copy", false, "Copies the first environment")
+	compact   = flag.Bool("compact", false, "Compacts during copy")
 )
 
 type entry struct {
@@ -147,6 +157,7 @@ var bdb *badger.DB
 var boltdb *bolt.DB
 var bboltdb *bbolt.DB
 var etcdb etcd.KV
+var pebbledb *pebble.DB
 var ldb *leveldb.DB
 var ldbhistories = map[int]*leveldb.DB{}
 var lmdbEnv *lmdb.Env
@@ -332,6 +343,22 @@ func writeBatch(entries []*entry, batchNum, workerNum int) int {
 		}
 	}
 
+	// Pebble
+	if pebbledb != nil {
+		var batch = &pebble.Batch{}
+		var wopts = &pebble.WriteOptions{}
+		if *syncWrite {
+			wopts.Sync = true
+		}
+		// println(hex.EncodeToString(entries[0].Key), hex.EncodeToString(entries[1].Key))
+		for _, e := range entries {
+			err = batch.Set(e.Key, e.Value, wopts)
+			y.Check(err)
+		}
+		err = pebbledb.Apply(batch, wopts)
+		y.Check(err)
+	}
+
 	// LMDB
 	if lmdbEnv != nil {
 		var lmdbDBI = lmdbDBIs[workerNum]
@@ -341,10 +368,32 @@ func writeBatch(entries []*entry, batchNum, workerNum int) int {
 		err = lmdbEnv.Update(func(txn *lmdb.Txn) error {
 			for _, e := range entries {
 				shard := (int(e.Key[0])*256 + int(e.Key[1])) % *shards
-				err = txn.Put(lmdbDBI[shard], e.Key[*keychop:*keypfx], e.Key[*keypfx:], lmdb.NoDupData)
+				cur, err := txn.OpenCursor(lmdbDBI[shard])
 				if err != nil {
 					return err
 				}
+				k, v, err := cur.Get(e.Key, e.Value, 0)
+				if bytes.Compare(k, e.Key) == 0 && bytes.Compare(v, e.Value) == 0 {
+					panic("Duplicate")
+				}
+				if len(e.Value) > 0 {
+					err = txn.Put(lmdbDBI[shard], e.Key, e.Value, 0)
+				} else {
+					err = txn.Put(lmdbDBI[shard], e.Key[*keychop:*keypfx], e.Key[*keypfx:], lmdb.NoDupData)
+				}
+				y.Check(err)
+			}
+			if batchNum == 0 || *logEvery > 0 && batchNum % *logEvery == 0 {
+				e := entries[0]
+				shard := (int(e.Key[0])*256 + int(e.Key[1])) % *shards
+				k := e.Key[*keychop:*keypfx]
+				v := e.Key[*keypfx:]
+				err = txn.Put(lmdbDBI[shard], k, v, lmdb.NoDupData)
+				if err == nil {
+					println(shard, hex.EncodeToString(k), hex.EncodeToString(v))
+					panic("Key not written")
+				}
+				println(shard, hex.EncodeToString(k), hex.EncodeToString(v))
 			}
 			return nil
 		})
@@ -455,6 +504,9 @@ func main() {
 	if *intdup {
 		fmt.Printf("MDB_INTEGERDUP ENABLED\n")
 	}
+	if *intkey {
+		fmt.Printf("MDB_INTEGERKEY ENABLED\n")
+	}
 	if *a {
 		fmt.Printf("APPEND\n")
 	}
@@ -522,6 +574,15 @@ func main() {
 		y.Check(err)
 		etcdb = etcd.NewKV(c)
 
+	} else if *which == "pebble" {
+		init = true
+		if !*a {
+			os.RemoveAll(*dir + "/pebble")
+			os.MkdirAll(*dir+"/pebble", 0777)
+		}
+		pebbledb, err = pebble.Open(*dir + "/pebble", &pebble.Options{})
+		y.Check(err)
+
 	} else if *which == "leveldb" {
 		init = true
 		fmt.Println("Init LevelDB")
@@ -549,9 +610,15 @@ func main() {
 			o |= lmdb.NoMetaSync
 		}
 		var err error
-		var dbopt = lmdb.DupSort|lmdb.DupFixed|lmdb.Create
+		var dbopt = lmdb.Create
+		if *valueSize == 0 {
+			dbopt |= lmdb.DupSort|lmdb.DupFixed
+		}
 		if *intdup {
-			dbopt |= MDB_INTEGERDUP|MDB_INTEGERKEY
+			dbopt |= MDB_INTEGERDUP
+		}
+		if *intkey {
+			dbopt |= MDB_INTEGERKEY
 		}
 		var openlmdb = func(p string, i int) (env *lmdb.Env, dbis []lmdb.DBI) {
 			if !*a {
@@ -582,6 +649,94 @@ func main() {
 				paths[s] = fmt.Sprintf(*dir+"/%x/%x%x.db", i, i, j)
 				lmdbEnvs[s], lmdbDBIs[s] = openlmdb(paths[s], s)
 			}
+		}
+		if *split {
+			start := time.Now()
+			err = lmdbEnvs[0].Update(func(txn *lmdb.Txn) error {
+				db0, err := txn.OpenDBI("split-0", uint(dbopt))
+				if err != nil {
+					return err
+				}
+				txn.Drop(db0, false)
+				db1, err := txn.OpenDBI("split-1", uint(dbopt))
+				if err != nil {
+					return err
+				}
+				txn.Drop(db1, false)
+				cur0, err := txn.OpenCursor(db0)
+				if err != nil {
+					return err
+				}
+				cur1, err := txn.OpenCursor(db1)
+				if err != nil {
+					return err
+				}
+				cur, err := txn.OpenCursor(lmdbDBIs[0][0])
+				if err != nil {
+					return err
+				}
+				stat, _ := txn.Stat(lmdbDBIs[0][0])
+				fmt.Printf("%d\n", stat.Entries)
+				// var total = int(stat.Entries)
+				var k []byte
+				var v []byte
+				var first bool
+				var total0 int
+				var total1 int
+				for i := 0; err == nil; i++ {
+					k, v, err = cur.Get(nil, nil, lmdb.Next)
+					if err != nil {
+						break
+					}
+					first = int(k[0])%2 == 0
+					// first = i < total/2
+					if *logEvery > 0 && i % *logEvery == 0 {
+						println(first, hex.EncodeToString(k), hex.EncodeToString(v), i, time.Now().Unix() - start.Unix())
+					}
+					if first {
+						total0++
+						err = cur0.Put(k, v, lmdb.AppendDup)
+						if err != nil {
+							return err
+						}
+					} else {
+						total1++
+						err = cur1.Put(k, v, lmdb.AppendDup)
+						if err != nil {
+							return err
+						}
+					}
+				}
+				if lmdb.IsNotFound(err) {
+					err = nil
+				} else {
+					return err
+				}
+				stat, _ = txn.Stat(db0)
+				fmt.Printf("db0 - %d\n", stat.Entries)
+				stat, _ = txn.Stat(db1)
+				fmt.Printf("db1 - %d\n", stat.Entries)
+				// println("dropping", total0, total1, time.Now().UnixNano() - start.UnixNano())
+				// err = txn.Drop(lmdbDBIs[0][0], true)
+				// y.Check(err)
+
+				return nil
+			})
+			y.Check(err)
+			fmt.Printf("done %v\n", time.Since(start))
+			os.Exit(1)
+		}
+		if *copyEnv {
+			start := time.Now()
+			if *compact {
+				err = lmdbEnvs[0].CopyFlag(paths[0] + ".cpy", lmdb.CopyCompact)
+			} else {
+				err = lmdbEnvs[0].Copy(paths[0] + ".cpy")
+			}
+			y.Check(err)
+			fmt.Printf("done %v\n", time.Since(start))
+			os.Exit(1)
+
 		}
 		fmt.Printf("Initialized after %v\n", time.Now().Sub(start))
 	} else {
@@ -766,6 +921,7 @@ func main() {
 				}(i, batchno)
 			}
 			wg2.Wait()
+			batchno++
 		}
 		wg.Done()
 	}
