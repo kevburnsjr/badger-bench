@@ -113,9 +113,7 @@ func fillEntry(e, prev *entry, workerNum, batchNum, entryNum int) {
 	// }
 	// e.Key = e.Key[:len(key)]
 	// copy(e.Key, key)
-	if *seqKeys {
-		binary.BigEndian.PutUint64(e.Key, uint64(time.Now().UnixNano()))
-	} else if !*noent {
+	if !*noent {
 		// rand.Read(e.Key)
 		if prev == nil {
 			rand.Read(e.Key)
@@ -130,6 +128,9 @@ func fillEntry(e, prev *entry, workerNum, batchNum, entryNum int) {
 				e.Key = a[:keylen]
 			}
 		}
+	}
+	if *seqKeys {
+		binary.BigEndian.PutUint64(e.Key, uint64(time.Now().UnixNano()))
 	}
 	// Fill is used to distribute keys sequentially over entire key space. You should see 0
 	// scans while using fill until you wrap around the keyspace at which point the number of
