@@ -168,11 +168,11 @@ var lmdbEnvs = map[int]*lmdb.Env{}
 var lmdbEnvHistories = map[int]*lmdb.Env{}
 var lmdbDBIs = map[int][]lmdb.DBI{}
 var lmdbDBIHistories = map[int][]lmdb.DBI{}
-var interval = time.Duration(*intv)
-var scan = ratecounter.NewRateCounter(interval * time.Second)
-var deletions = ratecounter.NewRateCounter(interval * time.Second)
-var put = ratecounter.NewRateCounter(interval * time.Second)
-var syncr = ratecounter.NewRateCounter(interval * time.Second)
+var interval time.Duration
+var scan *ratecounter.RateCounter
+var deletions *ratecounter.RateCounter
+var put *ratecounter.RateCounter
+var syncr *ratecounter.RateCounter
 var keylen int
 var subkeylen int
 var initSize int64
@@ -457,6 +457,12 @@ func main() {
 		// do nothing
 	}
 
+	interval = time.Duration(*intv) * time.Second
+	scan = ratecounter.NewRateCounter(interval)
+	deletions = ratecounter.NewRateCounter(interval)
+	put = ratecounter.NewRateCounter(interval)
+	syncr = ratecounter.NewRateCounter(interval)
+
 	trace.AuthRequest = func(req *http.Request) (any, sensitive bool) {
 		return true, true
 	}
@@ -626,8 +632,8 @@ func main() {
 			}
 			os.MkdirAll(path.Dir(p), 0777)
 			env, err = lmdb.NewEnv()
-			env.SetMaxDBs(65536)
-			env.SetMapSize(int64(1 << 38))
+			env.SetMaxDBs(256)
+			env.SetMapSize(int64(1 << 32))
 			env.Open(p, uint(o|lmdb.NoSubdir), 0777)
 			dbis = make([]lmdb.DBI, *shards)
 			err = env.Update(func(txn *lmdb.Txn) error {
@@ -765,12 +771,12 @@ func main() {
 	if !init {
 		log.Fatalf("Invalid arguments. Unable to init any store.")
 	}
-	rc := ratecounter.NewRateCounter(interval * time.Second)
+	rc := ratecounter.NewRateCounter(interval)
 	var counter int64
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
 		var count int64
-		t := time.NewTicker(interval * time.Second)
+		t := time.NewTicker(interval)
 		defer t.Stop()
 		report := func() {
 			c := atomic.LoadInt64(&counter)
@@ -815,13 +821,13 @@ func main() {
 				   // Data Items:  Depth:  Branch Pages:  Leaf Pages:  Overflow Pages:
 				   // %s      %s      %s         %s        %s`,
 					// count,
-					// humanize(kps/int64(interval)),
+					// humanize(kps/int64(*intv)),
 					// humanize(c),
-					// humanize(deletions.Rate()/int64(interval)),
-					// humanize(scan.Rate()/int64(interval)),
+					// humanize(deletions.Rate()/int64(*intv)),
+					// humanize(scan.Rate()/int64(*intv)),
 					// humanizeFloat(float64(scan.Rate())/float64(kpsd)),
-					// humanizeFloat(float64(put.Rate())/float64(interval*1000000)),
-					// humanizeFloat(float64(syncr.Rate())/float64(interval*1000000)),
+					// humanizeFloat(float64(put.Rate())/float64(*intv)),
+					// humanizeFloat(float64(syncr.Rate())/float64(*intv)),
 					// humanize(atomic.LoadInt64(&dataItems)),
 					// humanizeFloat(float64(atomic.LoadInt64(&depth)) / float64(len(lmdbEnvs))),
 					// humanize(atomic.LoadInt64(&branchPages) / int64(len(lmdbEnvs))),
@@ -829,25 +835,25 @@ func main() {
 					// humanize(atomic.LoadInt64(&overflowPages) / int64(len(lmdbEnvs))))
 				fmt.Printf("%d,%d,%d,%.2f,%d,%d,%d,%d\n",
 					dataItems,
-					kps/int64(interval),
-					int64(scan.Rate())/int64(interval),
+					kps/int64(*intv),
+					int64(scan.Rate())/int64(*intv),
 					float64(atomic.LoadInt64(&depth)) / float64(len(lmdbEnvs) * *shards),
 					atomic.LoadInt64(&branchPages),
 					atomic.LoadInt64(&leafPages),
 					atomic.LoadInt64(&dbsize),
-					deletions.Rate()/int64(interval))
+					deletions.Rate()/int64(*intv))
 			} else {
 				fmt.Printf("%d\t%d\n",
 					c,
-					kps/int64(interval))
+					kps/int64(*intv))
 					// int64(scan.Rate()))
 				// fmt.Printf(`
 // [%04d] %s Per Second %s Total %s Deleted Scan: %s Rate: %s`,
 					// count,
-					// humanize(kps/int64(interval)),
+					// humanize(kps/int64(*intv)),
 					// humanize(c),
-					// humanize(deletions.Rate()/int64(interval)),
-					// humanize(scan.Rate()/int64(interval)),
+					// humanize(deletions.Rate()/int64(*intv)),
+					// humanize(scan.Rate()/int64(*intv)),
 					// humanizeFloat(float64(scan.Rate())/float64(kpsd)))
 			}
 			count++
